@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/HWilliams64/docserver/compare/v1.0.0...v1.0.1) (2025-04-15)
+
+
+### Bug Fixes
+
+* **source:** :card_file_box: fixed issue where user passwords are not saved in the DB ([eada9e0](https://github.com/HWilliams64/docserver/commit/eada9e0a06b7e2cb359baf7c25e2bde4dddf31d9))
+
 ## 1.0.0 (2025-04-15)
 
 
