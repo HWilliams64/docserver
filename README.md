@@ -27,37 +27,52 @@ DocServer is a simple API server designed for **educational purposes only**. It 
 
 Pre-compiled binaries for different operating systems may be available on the [GitHub Releases page](https://github.com/HWilliams64/docserver/releases).
 
+### Choosing the Right Binary
 
-### Running Source
+The binaries are provided for different combinations of Operating System (OS) and CPU Architecture. Here's a guide to help you choose:
 
-#### Prerequisites
+| OS      | amd64 (x86_64)                                  | arm64 (aarch64)                                      |
+| :------ | :---------------------------------------------- | :--------------------------------------------------- |
+| Windows | Most desktop and laptop PCs (Intel/AMD processors). If unsure, choose this. | Newer PCs or tablets specifically using ARM chips (e.g., Surface Pro X, some newer Dell/Lenovo models). |
+| Mac     | Macs with an Intel processor (Generally models from Mid 2020 or earlier). | Macs with Apple Silicon (M1, M2, M3, etc. chips, generally models from Late 2020 onwards). |
+| Linux   | Most desktop PCs, laptops, and servers (Intel/AMD processors). | Devices like Raspberry Pi (versions 3 and newer), many modern Android phones/tablets (if running Linux), some newer servers, or other ARM-based single-board computers. |
 
-*   Go (version 1.18 or later recommended)
+*   **amd64 (also known as x86_64):** This is the most common architecture for desktop and laptop computers running Windows or Linux, and for older Mac computers.
+*   **arm64 (also known as aarch64):** This architecture is common in mobile devices (like phones and tablets), newer Mac computers (Apple Silicon), Raspberry Pi devices, and some newer Windows laptops/tablets.
 
-#### Running the Server
+#### Release File Naming Convention
 
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository-url>
-    cd docserver
-    ```
-2.  **Run directly using `go run`:**
-    ```bash
-    go run main.go [arguments...]
-    ```
-    The server will start, typically listening on `0.0.0.0:8080` by default.
+The release files follow the pattern `docserver-<OS>-<ARCH>[.extension]`:
 
-#### Building the Server
+*   `<OS>`: The target operating system (`linux`, `windows`, or `darwin` for Mac).
+*   `<ARCH>`: The CPU architecture (`amd64` or `arm64`).
+*   `[.extension]`: Windows executables have a `.exe` extension. Linux and Mac executables typically have no extension.
 
-1.  **Build the binary:**
-    ```bash
-    go build -o docserver main.go
-    ```
-    This will create an executable file named `docserver` (or `docserver.exe` on Windows).
-2.  **Run the compiled binary:**
-    ```bash
-    ./docserver [arguments...]
-    ```
+For example:
+*   `docserver-windows-amd64.exe`: For standard 64-bit Windows.
+*   `docserver-darwin-arm64`: For Macs with Apple Silicon (M1/M2/M3).
+*   `docserver-linux-amd64`: For standard 64-bit Linux.
+
+#### Running the Binary
+
+After downloading the appropriate binary:
+
+1.  **Open your terminal or command prompt.**
+2.  **Navigate to the directory where you downloaded the file.**
+3.  **Run the binary:**
+
+    *   **Windows (Command Prompt or PowerShell):**
+        ```bash
+        .\docserver-windows-<ARCH>.exe [arguments...]
+        ```
+        *(e.g., `.\docserver-windows-amd64.exe -port 9000`)*
+    *   **Mac/Linux (Terminal):**
+        ```bash
+        ./docserver-<OS>-<ARCH> [arguments...]
+        ```
+        *(e.g., `./docserver-darwin-arm64 -port 9000` or `./docserver-linux-amd64 --db-file /data/mydocs.json`)*
+
+Refer to the [Configuration](#configuration) section below for available arguments like `-port` or `-db-file`.
 
 ## Configuration
 
@@ -92,6 +107,45 @@ Authentication for protected API endpoints is handled using JSON Web Tokens (JWT
     ```
     Authorization: Bearer <your_jwt_token>
     ```
+### Authentication Flow
+
+Here's a typical sequence for accessing protected resources like documents:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    %% Signup %%
+    Client->>Server: POST /auth/signup (email, password, name)
+    Server-->>Server: Hash password, Create profile
+    Server->>Client: 201 Created (Profile details)
+
+    %% Login %%
+    Client->>Server: POST /auth/login (email, password)
+    Server-->>Server: Verify credentials, Generate JWT
+    Server->>Client: 200 OK (JWT Token)
+
+    %% Access Protected Resource (e.g., Create Document) %%
+    Client->>Server: POST /documents (Authorization: Bearer <JWT Token>, content)
+    Server-->>Server: Middleware: Validate JWT
+    alt JWT Valid
+        Server-->>Server: Process request (e.g., Create document)
+        Server->>Client: 201 Created (Document details)
+    else JWT Invalid/Missing
+        Server->>Client: 401 Unauthorized
+    end
+```
+
+**Explanation:**
+
+1.  **Signup:** The user first creates an account using their email, password, and name via the `/auth/signup` endpoint. The server hashes the password and stores the user profile.
+2.  **Login:** The user then logs in using their email and password via `/auth/login`. If the credentials are correct, the server generates a JWT (JSON Web Token) and sends it back to the client.
+3.  **Store Token:** The client application (e.g., browser, mobile app) must securely store this JWT.
+4.  **Authenticated Request:** To access a protected endpoint (like `POST /documents` to create a document, or `GET /documents/{id}` to retrieve one), the client must include the stored JWT in the `Authorization` header of the request, using the `Bearer` scheme (e.g., `Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`).
+5.  **Server Verification:** The server's authentication middleware intercepts the request, extracts the JWT from the header, and verifies its signature and expiration.
+6.  **Access Granted/Denied:** If the JWT is valid, the middleware allows the request to proceed to the intended handler (e.g., `CreateDocumentHandler`). If the JWT is missing, invalid, or expired, the server rejects the request with a `401 Unauthorized` error.
+
 
 ## API Documentation
 
@@ -101,4 +155,51 @@ Once the server is running, interactive API documentation (Swagger UI) is availa
 
 (e.g., `http://localhost:8080/swagger/index.html`)
 
-This documentation provides details on all available endpoints, request/response formats, and includes the specifics of the `content_query` syntax.
+This documentation provides details on all available endpoints, request/response
+formats, and includes the specifics of the `content_query` syntax.
+
+## Running Source
+**Note:** For most users, downloading and running a [pre-compiled binary](#downloading-pre-compiled-binaries) is the easiest way to get started. The instructions below are primarily for developers who want to modify the code or build the server themselves.
+
+
+#### Prerequisites
+
+*   Go (version 1.18 or later recommended)
+
+#### Running the Server
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/HWilliams64/docserver/releases
+    cd docserver
+    ```
+2.  **Run directly using `go run`:**
+    ```bash
+    go run main.go [arguments...]
+    ```
+    The server will start, typically listening on `0.0.0.0:8080` by default.
+
+#### Building the Server
+
+1.  **Build the binary:**
+    ```bash
+    go build -o docserver main.go
+    ```
+    This will create an executable file named `docserver` (or `docserver.exe` on Windows).
+2.  **Run the compiled binary:**
+    ```bash
+    ./docserver [arguments...]
+    ```
+### Running Tests
+
+The project includes unit and integration tests. To run all tests:
+
+1.  **Ensure you are in the project's root directory** (the `docserver` directory containing `go.mod`).
+2.  **Run the Go test command:**
+    ```bash
+    go test ./...
+    ```
+    This command discovers and runs all tests (`*_test.go` files) within the current directory and all its subdirectories.
+
+*   **Unit Tests:** These typically test individual functions or components in isolation (e.g., testing utility functions, database query logic).
+*   **Integration Tests:** These test the interaction between different parts of the system, often involving setting up a test server and making actual API calls (e.g., testing the full signup-login-create document flow). The integration tests are located in the `integration_tests` directory.

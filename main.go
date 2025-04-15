@@ -96,19 +96,13 @@ import (
 // @description     8.  **Nested Field with `AND`:** Find documents where `assignee.name` is `Alice` **AND** `metadata.reviewed` is `true`.
 // @description         `?content_query=assignee.name eq \"Alice\"&content_query=metadata.reviewed eq true`
 
-// @termsOfService  http://swagger.io/terms/
+// @license.name  MIT
+// @license.url   https://github.com/HWilliams64/docserver/blob/main/License.md
 
-// @contact.name   API Support
-// @contact.url    http://www.swagger.io/support
-// @contact.email  support@swagger.io
-
-// @license.name  Apache 2.0
-// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
-
-// @host      0.0.0.0:8080
+// @host      localhost:8080
 // @BasePath  /
 
-// @securityDefinitions.apikey BearerAuth
+// @securityDefinitions.jwt BearerAuth
 // @in header
 // @name Authorization
 // @description Type "Bearer" followed by a space and JWT token.
