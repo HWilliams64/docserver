@@ -23,11 +23,18 @@ DocServer is a simple API server designed for **educational purposes only**. It 
 
 ## Getting Started
 
-### Prerequisites
+### Downloading Pre-compiled Binaries
+
+Pre-compiled binaries for different operating systems may be available on the [GitHub Releases page](https://github.com/HWilliams64/docserver/releases).
+
+
+### Running Source
+
+#### Prerequisites
 
 *   Go (version 1.18 or later recommended)
 
-### Running the Server
+#### Running the Server
 
 1.  **Clone the repository:**
     ```bash
@@ -40,7 +47,7 @@ DocServer is a simple API server designed for **educational purposes only**. It 
     ```
     The server will start, typically listening on `0.0.0.0:8080` by default.
 
-### Building the Server
+#### Building the Server
 
 1.  **Build the binary:**
     ```bash
@@ -51,10 +58,6 @@ DocServer is a simple API server designed for **educational purposes only**. It 
     ```bash
     ./docserver [arguments...]
     ```
-
-### Downloading Pre-compiled Binaries
-
-Pre-compiled binaries for different operating systems may be available on the [GitHub Releases page](<your-github-repo-url>/releases) (Replace `<your-github-repo-url>` with the actual repository URL).
 
 ## Configuration
 
@@ -79,6 +82,16 @@ The JWT secret used to sign authentication tokens is determined in the following
 3.  **Generated Secret:** If neither a file nor an environment variable provides a secret, a new random secret is generated.
     *   The server will attempt to save this generated secret to `./docs.key`.
     *   **Important:** If a secret is generated, ensure the `./docs.key` file persists across server restarts, or users will be logged out. Add this file to your `.gitignore`.
+
+## Authentication
+
+Authentication for protected API endpoints is handled using JSON Web Tokens (JWT).
+
+1.  **Login:** Obtain a JWT by sending valid user credentials to the `/login` endpoint.
+2.  **Authorization Header:** For subsequent requests to protected endpoints, include the obtained JWT in the `Authorization` header using the `Bearer` scheme:
+    ```
+    Authorization: Bearer <your_jwt_token>
+    ```
 
 ## API Documentation
 
