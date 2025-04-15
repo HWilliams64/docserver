@@ -195,7 +195,7 @@ info:
     name: MIT
     url: https://github.com/HWilliams64/docserver/blob/main/License.md
   title: DocServer API
-  version: "1.0"
+  version: 1.0.1
 paths:
   /auth/forgot-password:
     post:
