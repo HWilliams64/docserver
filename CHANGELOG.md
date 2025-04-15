@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.2](https://github.com/HWilliams64/docserver/compare/v1.0.1...v1.0.2) (2025-04-15)
+
+
+### Bug Fixes
+
+* **docs:** :arrow_down: downgraded github.com/swaggo/swag to go v1.16.1 ([ce6d609](https://github.com/HWilliams64/docserver/commit/ce6d60924bab8a3a9717c019eb1ddbf0ef5885a7))
+* **docs:** :arrow_down: downgraded github.com/swaggo/swag to go v1.16.1 ([66e85ac](https://github.com/HWilliams64/docserver/commit/66e85ac72502b88ab6e265e21db8ebc20e8fbf0c))
+
 ## [1.0.1](https://github.com/HWilliams64/docserver/compare/v1.0.0...v1.0.1) (2025-04-15)
 
 
