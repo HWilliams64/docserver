@@ -1,0 +1,33 @@
+# Secrets
+docs.key
+
+# Test data
+test_docs.json
+docs.json
+
+# Compiled binary
+app_binary
+
+# Go build outputs
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test coverage
+coverage.out
+coverage.html
+
+# Dependency directory (if used)
+# vendor/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE/Editor specific files
+.vscode/
+.idea/
+*.swp
+*~

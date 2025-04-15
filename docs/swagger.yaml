@@ -1,0 +1,1202 @@
+basePath: /
+definitions:
+  api.CreateDocumentRequest:
+    properties:
+      content:
+        description: Content can be any valid JSON
+    required:
+    - content
+    type: object
+  api.ForgotPasswordRequest:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  api.GetDocumentsResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/models.Document'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+    type: object
+  api.GetSharersResponse:
+    properties:
+      shared_with:
+        description: List of Profile IDs (dashless)
+        items:
+          type: string
+        type: array
+    type: object
+  api.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  api.LoginResponse:
+    properties:
+      token:
+        type: string
+    type: object
+  api.ResetPasswordRequest:
+    properties:
+      email:
+        type: string
+      new_password:
+        minLength: 8
+        type: string
+      otp:
+        type: string
+    required:
+    - email
+    - new_password
+    - otp
+    type: object
+  api.SearchProfilesResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/models.Profile'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+    type: object
+  api.SetSharersRequest:
+    properties:
+      shared_with:
+        description: |-
+          Use pointer to distinguish between empty list and not provided?
+          No, binding:"required" means it must be present, even if empty array `[]`.
+        items:
+          type: string
+        type: array
+    required:
+    - shared_with
+    type: object
+  api.SignupRequest:
+    properties:
+      email:
+        type: string
+      extra: {}
+      first_name:
+        type: string
+      last_name:
+        type: string
+      password:
+        description: Add basic password length validation
+        minLength: 8
+        type: string
+    required:
+    - email
+    - first_name
+    - last_name
+    - password
+    type: object
+  api.UpdateDocumentRequest:
+    properties:
+      content: {}
+    required:
+    - content
+    type: object
+  api.UpdateProfileRequest:
+    properties:
+      extra: {}
+      first_name:
+        type: string
+      last_name:
+        type: string
+    required:
+    - first_name
+    - last_name
+    type: object
+  models.Document:
+    properties:
+      content:
+        description: Can be any JSON structure or simple text
+      creation_date:
+        description: UTC
+        type: string
+      id:
+        description: Unique ID (UUID, dashless)
+        type: string
+      last_modified_date:
+        description: UTC
+        type: string
+      owner_id:
+        description: Profile ID of the owner
+        type: string
+    type: object
+  models.Profile:
+    properties:
+      creation_date:
+        description: UTC
+        type: string
+      email:
+        description: Unique, used for login
+        type: string
+      extra:
+        description: User-defined data
+      first_name:
+        type: string
+      id:
+        description: Unique ID (UUID, dashless)
+        type: string
+      last_modified_date:
+        description: UTC
+        type: string
+      last_name:
+        type: string
+    type: object
+  utils.APIError:
+    properties:
+      error:
+        type: string
+    type: object
+host: 0.0.0.0:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: |-
+    ## DocServer API
+
+    **Purpose:** This is a simple API server designed for **academic and educational purposes only**. It demonstrates basic concepts of user authentication, document storage (as JSON), document sharing, and content-based querying. **It is NOT intended for production use.**
+
+    **High-Level Overview:**
+    DocServer allows users to:
+    *   Register and log in to manage their accounts.
+    *   Create, retrieve, update, and delete documents. Document content can be any valid JSON structure.
+    *   Share their documents with other registered users.
+    *   Search for documents they have access to, including powerful filtering based on the document's JSON content.
+
+    **Content Querying (`content_query` parameter):**
+    The `GET /documents` endpoint supports filtering documents based on their content using the `content_query` parameter. This allows you to search for documents where specific fields within the JSON content match certain criteria.
+
+    **Query Syntax:**
+    Each `content_query` parameter string follows the format: `path operator value`
+
+    *   **`path`**: A dot-separated path to navigate the JSON structure (e.g., `user.name`, `details.metadata.version`). Use numeric indices for arrays (e.g., `items.0.id`, `tags.1`).
+    *   **`operator`**: The comparison operator. Supported operators include:
+    *   `eq`: Equal to (strings, numbers, booleans, null)
+    *   `ne`: Not equal to
+    *   `gt`: Greater than (numbers)
+    *   `gte`: Greater than or equal to (numbers)
+    *   `lt`: Less than (numbers)
+    *   `lte`: Less than or equal to (numbers)
+    *   `contains`: String contains substring (case-sensitive)
+    *   `startswith`: String starts with prefix (case-sensitive)
+    *   `endswith`: String ends with suffix (case-sensitive)
+    *   **`value`**: The value to compare against.
+    *   Strings MUST be enclosed in double quotes (e.g., `\"John Doe\"`). Remember to URL-encode the query parameter string.
+    *   Numbers (e.g., `123`, `45.6`), booleans (`true`/`false`), and `null` should be used directly.
+
+    **Logical Operators (Combining Queries):**
+    You combine multiple conditions by providing multiple `content_query` parameters.
+    *   **`AND` (Implicit):** By default, consecutive `path operator value` queries are joined by `AND`. The document must match *all* conditions.
+    *   **`OR` (Explicit):** To use `OR`, add `content_query=OR` *before* the condition you want to link with OR. The `OR` applies between the condition *before* it and the condition *after* it.
+
+    **Examples:**
+
+    *Assume document content like:*
+    ```json
+    {
+    "project": "Alpha",
+    "status": "active",
+    "priority": 5,
+    "assignee": { "name": "Alice", "email": "alice@example.com" },
+    "tags": ["urgent", "backend"],
+    "metadata": { "version": 1.2, "reviewed": true }
+    }
+    ```
+
+    1.  **Simple Equality:** Find documents where `status` is `active`.
+    `?content_query=status eq \"active\"`
+
+    2.  **Numeric Comparison:** Find documents where `priority` is greater than or equal to `5`.
+    `?content_query=priority gte 5`
+
+    3.  **Nested Field:** Find documents assigned to `Alice`.
+    `?content_query=assignee.name eq \"Alice\"`
+
+    4.  **Array Element:** Find documents where the first tag is `urgent`.
+    `?content_query=tags.0 eq \"urgent\"`
+
+    5.  **Implicit `AND`:** Find documents for project `Alpha` **AND** status `active`.
+    `?content_query=project eq \"Alpha\"&content_query=status eq \"active\"`
+
+    6.  **Explicit `OR`:** Find documents where status is `active` **OR** priority is less than `3`.
+    `?content_query=status eq \"active\"&content_query=OR&content_query=priority lt 3`
+
+    7.  **Combined `AND` and `OR`:** Find documents where (project is `Alpha` **AND** status is `active`) **OR** (priority is `10`).
+    `?content_query=project eq \"Alpha\"&content_query=status eq \"active\"&content_query=OR&content_query=priority eq 10`
+    *(Explanation: `project eq "Alpha"` AND `status eq "active"` are grouped implicitly. The `OR` then links this group to `priority eq 10`.)*
+
+    8.  **Nested Field with `AND`:** Find documents where `assignee.name` is `Alice` **AND** `metadata.reviewed` is `true`.
+    `?content_query=assignee.name eq \"Alice\"&content_query=metadata.reviewed eq true`
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: DocServer API
+  version: "1.0"
+paths:
+  /auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Initiates the password reset process by requesting a One-Time Password (OTP) to be sent (conceptually) to the user's registered email address.
+
+        Provide the `email` address associated with the account you want to reset the password for.
+        **Security Note:** To prevent attackers from figuring out which emails are registered ("email enumeration"), this endpoint will *always* return a `202 Accepted` response, regardless of whether the email exists in the system or not.
+        If the email *does* exist, the server generates an OTP, stores it temporarily, and (in a real system) would send it via email. The OTP is needed for the `/auth/reset-password` step.
+      parameters:
+      - description: The email address for the account needing a password reset.
+        in: body
+        name: forgotPassword
+        required: true
+        schema:
+          $ref: '#/definitions/api.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Request Accepted. If the email address is registered, an OTP
+            has been generated (and would typically be emailed). Check your email
+            for the code.
+        "400":
+          description: 'Bad Request: The request body is invalid (e.g., missing email
+            or invalid format).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            while processing the request (e.g., OTP generation failed).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      summary: Request Password Reset Code (OTP)
+      tags:
+      - Authentication
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Authenticates a user using their registered email and password.
+
+        If the credentials are correct, the server generates a JSON Web Token (JWT). This token acts like a temporary key or session ID.
+        You need to include this JWT in the `Authorization` header (as a Bearer token) for subsequent requests to protected endpoints (like accessing your profile or documents).
+        Example Header: `Authorization: Bearer <your_token_here>`
+      parameters:
+      - description: Your email and password.
+        in: body
+        name: login
+        required: true
+        schema:
+          $ref: '#/definitions/api.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login Successful. The response body contains the JWT access
+            token.
+          schema:
+            $ref: '#/definitions/api.LoginResponse'
+        "400":
+          description: 'Bad Request: The data you sent is invalid (e.g., missing email
+            or password, incorrect JSON format).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "401":
+          description: 'Unauthorized: The email or password you provided is incorrect.
+            Please check your credentials.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            during login (e.g., database issue, error generating the JWT).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      summary: Log In to Your Account
+      tags:
+      - Authentication
+  /auth/logout:
+    post:
+      description: |-
+        Indicates the intention to log out. Since JWTs are stateless (the server doesn't keep track of active tokens), true logout happens on the client-side.
+
+        **Action Required by Client:** To effectively log out, the client application (e.g., your web browser or mobile app) MUST delete or discard the stored JWT access token.
+        Calling this endpoint doesn't invalidate the token on the server, but it serves as a conventional way to signal the end of a session in API design.
+      responses:
+        "204":
+          description: Logout Signaled. No content is returned. Remember to discard
+            the JWT on the client.
+        "401":
+          description: 'Unauthorized: Although logout is client-side, this endpoint
+            might still require a valid token to be called as per API design consistency.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      security:
+      - BearerAuth: []
+      summary: Log Out (Client-Side Action)
+      tags:
+      - Authentication
+  /auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Completes the password reset process by setting a new password for the account.
+
+        You must provide:
+        *   The `email` address of the account.
+        *   The `otp` (One-Time Password) received after calling `/auth/forgot-password`.
+        *   The desired `new_password` (must meet minimum length requirements, e.g., 8 characters).
+
+        The server will first verify if the provided OTP is correct and hasn't expired for the given email. If valid, it will hash the `new_password` and update the user's account.
+      parameters:
+      - description: Email, OTP, and the new password.
+        in: body
+        name: resetPassword
+        required: true
+        schema:
+          $ref: '#/definitions/api.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Password Reset Successful. Your new password is now active.
+            You can log in using it. No content is returned in the response body.
+        "400":
+          description: 'Bad Request: The request body is invalid (e.g., missing fields,
+            new password too short).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "401":
+          description: 'Unauthorized: The provided OTP is incorrect, expired, or does
+            not match the email address.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "404":
+          description: 'Not Found: The profile associated with the email address could
+            not be found (e.g., it might have been deleted after the OTP was requested).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            (e.g., hashing the new password failed, database update failed).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      summary: Set New Password Using Reset Code (OTP)
+      tags:
+      - Authentication
+  /auth/signup:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Creates a new user profile in the system. This is the first step for a new user to start using the service.
+
+        You need to provide your desired `email`, a secure `password` (minimum 8 characters), your `first_name`, and `last_name`.
+        The server will securely hash the password before storing it (meaning the original password is never saved directly).
+        If the email address is already registered, the request will fail.
+      parameters:
+      - description: User registration details. All fields except 'extra' are required.
+        in: body
+        name: signup
+        required: true
+        schema:
+          $ref: '#/definitions/api.SignupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Account Created Successfully. The response body contains the
+            details of the newly created profile (excluding the password hash).
+          schema:
+            $ref: '#/definitions/models.Profile'
+        "400":
+          description: 'Bad Request: The data you sent is invalid (e.g., missing required
+            fields, invalid email format, password too short) OR the email address
+            is already in use by another account.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            while creating the account (e.g., password hashing failed, database connection
+            issue).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      summary: Register a New User Account
+      tags:
+      - Authentication
+  /documents:
+    get:
+      description: |-
+        Retrieves a list of documents that the currently logged-in user has access to (either owned or shared with them).
+
+        This endpoint supports powerful filtering, sorting, and pagination using query parameters:
+        *   `scope`: Control which documents to see:
+        *   `owned`: Only documents you created.
+        *   `shared`: Only documents shared with you by others.
+        *   `all` (default): Both owned and shared documents.
+        *   `content_query`: Filter documents based on their JSON content using a specific query language (details likely in separate documentation or examples). This allows searching within the document data itself. Example: `?content_query=metadata.status eq "published"`
+        *   `sort_by`: Choose the field to sort results by: `creation_date` (default) or `last_modified_date`.
+        *   `order`: Set the sort direction: `asc` (ascending) or `desc` (descending, default).
+        *   `page`: For pagination, specify the page number (starts at 1, default is 1).
+        *   `limit`: For pagination, specify the number of documents per page (default is 20, max is 100).
+
+        Example: `/documents?scope=owned&sort_by=last_modified_date&order=asc&page=1&limit=10` (Get the first 10 oldest modified documents owned by the user).
+      parameters:
+      - default: all
+        description: 'Filter by ownership: ''owned'', ''shared'', or ''all''.'
+        enum:
+        - owned
+        - shared
+        - all
+        example: owned
+        in: query
+        name: scope
+        type: string
+      - collectionFormat: multi
+        description: Advanced filter based on document content (specific syntax applies).
+        example: user.name eq "John Doe"
+        in: query
+        items:
+          type: string
+        name: content_query
+        type: array
+      - default: creation_date
+        description: Field to sort results by.
+        enum:
+        - creation_date
+        - last_modified_date
+        example: last_modified_date
+        in: query
+        name: sort_by
+        type: string
+      - default: desc
+        description: Sorting direction.
+        enum:
+        - asc
+        - desc
+        example: asc
+        in: query
+        name: order
+        type: string
+      - default: 1
+        description: Page number for pagination (starts at 1).
+        example: 2
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 20
+        description: Number of documents per page.
+        example: 50
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: A list of documents matching the criteria, along with pagination
+            details (total count, current page, limit).
+          schema:
+            $ref: '#/definitions/api.GetDocumentsResponse'
+        "400":
+          description: 'Bad Request: One or more query parameters are invalid (e.g.,
+            invalid ''scope'', incorrect ''content_query'' syntax, non-integer ''page''/''limit'').'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "401":
+          description: 'Unauthorized: Your access token is missing, invalid, or expired.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            while retrieving documents.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      security:
+      - BearerAuth: []
+      summary: List and Search Your Documents
+      tags:
+      - Documents
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Allows a logged-in user to create and store a new document.
+
+        The document's `content` can be any valid JSON structure – an object (`{}`), an array (`[]`), a string (`""`), a number, a boolean (`true`/`false`), or `null`.
+        The server automatically assigns a unique ID to the document and records the user who created it (the owner) and the creation/modification timestamps.
+        You must provide your access token for authentication. The request body needs a `content` field containing the JSON data you want to store.
+
+        Example Request Body:
+        ```json
+        {
+        "content": {
+        "title": "My First Document",
+        "body": "This is the content.",
+        "tags": ["example", "getting started"]
+        }
+        }
+        ```
+      parameters:
+      - description: The JSON content you want to store in the new document.
+        in: body
+        name: document
+        required: true
+        schema:
+          $ref: '#/definitions/api.CreateDocumentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Document Created Successfully. The response body contains the
+            details of the newly created document, including its unique ID.
+          schema:
+            $ref: '#/definitions/models.Document'
+        "400":
+          description: 'Bad Request: The request body is invalid. It must be valid
+            JSON and contain the required ''content'' field.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "401":
+          description: 'Unauthorized: Your access token is missing, invalid, or expired.
+            You need to be logged in to create documents.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            while creating the document (e.g., database error).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      security:
+      - BearerAuth: []
+      summary: Create a New Document
+      tags:
+      - Documents
+  /documents/{id}:
+    delete:
+      description: |-
+        Permanently deletes a specific document from the system.
+
+        **WARNING: This action is irreversible!** Once deleted, the document cannot be recovered.
+        Any records indicating this document was shared with others will also be removed.
+
+        Only the user who originally created (owns) the document is allowed to delete it.
+        Provide the document's `id` in the URL path. Authentication via access token is required.
+      parameters:
+      - description: The unique identifier of the document to delete.
+        example: doc_abc123xyz
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Document Deleted Successfully. No content is returned in the
+            response body because the resource no longer exists.
+        "400":
+          description: 'Bad Request: The document ID provided in the URL path is missing
+            or invalid.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "401":
+          description: 'Unauthorized: Your access token is missing, invalid, or expired.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "403":
+          description: 'Forbidden: You are not the owner of this document, so you
+            cannot delete it.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "404":
+          description: 'Not Found: No document exists with the specified ID. (Note:
+            The API might return 204 even if not found, treating deletion of a non-existent
+            item as success).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            while deleting the document.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      security:
+      - BearerAuth: []
+      summary: Delete a Document
+      tags:
+      - Documents
+    get:
+      description: |-
+        Retrieves the full details of a single document using its unique identifier (`id`).
+
+        You can only retrieve a document if:
+        1. You are the owner of the document.
+        OR
+        2. The document has been explicitly shared with you by its owner.
+
+        Provide the document's `id` as part of the URL path. You also need your access token for authentication.
+      parameters:
+      - description: The unique identifier of the document you want to retrieve.
+        example: doc_abc123xyz
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved the document. The response body contains
+            the document's details (ID, owner, content, timestamps).
+          schema:
+            $ref: '#/definitions/models.Document'
+        "400":
+          description: 'Bad Request: The document ID provided in the URL path is missing
+            or invalid.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "401":
+          description: 'Unauthorized: Your access token is missing, invalid, or expired.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "403":
+          description: 'Forbidden: You do not have permission to view this document.
+            You are neither the owner nor has it been shared with you.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "404":
+          description: 'Not Found: No document exists with the specified ID.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            while retrieving the document.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      security:
+      - BearerAuth: []
+      summary: Get a Specific Document by ID
+      tags:
+      - Documents
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Replaces the *entire* existing content of a specific document with new content.
+
+        **Important:** This operation overwrites the previous content completely. If you only want to modify parts of the content, you should first retrieve the document, make changes to the content in your application, and then use this endpoint to save the full, modified content.
+
+        Only the user who originally created (owns) the document is allowed to update it.
+        Provide the document's `id` in the URL path and the new JSON `content` in the request body. Authentication via access token is required.
+
+        Example Request Body:
+        ```json
+        {
+        "content": { "message": "Updated content here!" }
+        }
+        ```
+      parameters:
+      - description: The unique identifier of the document to update.
+        example: doc_abc123xyz
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: The new JSON content to replace the existing document content.
+        in: body
+        name: document
+        required: true
+        schema:
+          $ref: '#/definitions/api.UpdateDocumentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Document Updated Successfully. The response body contains the
+            complete document with the updated content and modification timestamp.
+          schema:
+            $ref: '#/definitions/models.Document'
+        "400":
+          description: 'Bad Request: The document ID in the path is missing/invalid,
+            or the request body is invalid (must contain ''content'' field with valid
+            JSON).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "401":
+          description: 'Unauthorized: Your access token is missing, invalid, or expired.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "403":
+          description: 'Forbidden: You are not the owner of this document, so you
+            cannot update it.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "404":
+          description: 'Not Found: No document exists with the specified ID.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            while updating the document.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      security:
+      - BearerAuth: []
+      summary: Update a Document's Content
+      tags:
+      - Documents
+  /documents/{id}/shares:
+    get:
+      description: |-
+        Retrieves a list of user profile IDs that a specific document has been shared with.
+
+        Only the user who originally created (owns) the document can use this endpoint to see who they've shared it with.
+        Provide the document's `id` in the URL path. Authentication via access token is required.
+        If the document hasn't been shared with anyone, it returns an empty list.
+      parameters:
+      - description: The unique identifier of the document whose share list you want
+          to view.
+        example: doc_abc123xyz
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved the list of profile IDs the document
+            is shared with. The 'shared_with' array contains the IDs.
+          schema:
+            $ref: '#/definitions/api.GetSharersResponse'
+        "400":
+          description: 'Bad Request: The document ID provided in the URL path is missing
+            or invalid.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "401":
+          description: 'Unauthorized: Your access token is missing, invalid, or expired.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "403":
+          description: 'Forbidden: You are not the owner of this document, so you
+            cannot view its share list.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "404":
+          description: 'Not Found: No document exists with the specified ID.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            while retrieving the share list.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      security:
+      - BearerAuth: []
+      summary: See Who a Document is Shared With
+      tags:
+      - Sharing
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Completely replaces the list of users a specific document is shared with.
+
+        Provide a JSON array named `shared_with` in the request body, containing the profile IDs of the users you want to share the document with.
+        **Important:** Any users previously shared with, but *not* included in the new list, will lose access.
+        To remove *all* shares for a document, send an empty array: `{"shared_with": []}`.
+
+        Only the document owner can perform this operation. You cannot share a document with yourself (the owner).
+        Provide the document's `id` in the URL path. Authentication via access token is required.
+
+        Example Request Body (Share with user 'user_123' and 'user_456'):
+        ```json
+        {
+        "shared_with": ["user_123", "user_456"]
+        }
+        ```
+      parameters:
+      - description: The unique identifier of the document whose share list you want
+          to set/replace.
+        example: doc_abc123xyz
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: A JSON object containing the 'shared_with' key, whose value is
+          an array of profile IDs.
+        in: body
+        name: shareRequest
+        required: true
+        schema:
+          $ref: '#/definitions/api.SetSharersRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Share List Updated Successfully. No content is returned in
+            the response body.
+        "400":
+          description: 'Bad Request: The request body is invalid (e.g., missing ''shared_with''
+            array, invalid JSON) OR you tried to include the owner''s ID in the ''shared_with''
+            list.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "401":
+          description: 'Unauthorized: Your access token is missing, invalid, or expired.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "403":
+          description: 'Forbidden: You are not the owner of this document, so you
+            cannot modify its share list.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "404":
+          description: 'Not Found: No document exists with the specified ID.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            while updating the share list.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      security:
+      - BearerAuth: []
+      summary: Set/Replace Who a Document is Shared With
+      tags:
+      - Sharing
+  /documents/{id}/shares/{profile_id}:
+    delete:
+      description: |-
+        Removes a single specified user (by their `profile_id`) from the list of users who can access a specific document.
+
+        This operation only affects the specified user; other users the document is shared with remain unaffected.
+        It's *idempotent*, meaning if you try to remove a user who doesn't currently have access (or never did), the operation succeeds without error.
+
+        Only the document owner can perform this operation.
+        Provide the document's `id` and the target user's `profile_id` (the one to remove) in the URL path. Authentication via access token is required.
+      parameters:
+      - description: The unique identifier of the document you want to modify shares
+          for.
+        example: doc_abc123xyz
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: The unique identifier of the user profile whose access you want
+          to revoke.
+        example: user_123
+        in: path
+        name: profile_id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: User Removed from Share List Successfully (or was not shared
+            with). No content is returned.
+        "401":
+          description: 'Unauthorized: Your access token is missing, invalid, or expired.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "403":
+          description: 'Forbidden: You are not the owner of this document, so you
+            cannot modify its shares.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "404":
+          description: 'Not Found: The specified Document ID or Profile ID does not
+            exist, or the IDs were missing from the URL path.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            while removing the user from the share list.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      security:
+      - BearerAuth: []
+      summary: Stop Sharing a Document with One User
+      tags:
+      - Sharing
+    put:
+      description: |-
+        Adds a single specified user (by their `profile_id`) to the list of users who can access a specific document.
+
+        This operation is *additive* – it doesn't affect other users the document might already be shared with.
+        It's also *idempotent*, meaning if you try to add a user who already has access, the operation succeeds without making any changes.
+
+        Only the document owner can perform this operation. You cannot share a document with yourself (the owner).
+        Provide the document's `id` and the target user's `profile_id` in the URL path. Authentication via access token is required.
+      parameters:
+      - description: The unique identifier of the document you want to share.
+        example: doc_abc123xyz
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: The unique identifier of the user profile you want to grant access
+          to.
+        example: user_123
+        in: path
+        name: profile_id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: User Added to Share List Successfully (or was already shared
+            with). No content is returned.
+        "400":
+          description: 'Bad Request: You tried to share the document with its owner
+            (yourself).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "401":
+          description: 'Unauthorized: Your access token is missing, invalid, or expired.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "403":
+          description: 'Forbidden: You are not the owner of this document, so you
+            cannot share it.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "404":
+          description: 'Not Found: The specified Document ID or Profile ID does not
+            exist, or the IDs were missing from the URL path.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            while adding the user to the share list.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      security:
+      - BearerAuth: []
+      summary: Share a Document with One User
+      tags:
+      - Sharing
+  /profiles:
+    get:
+      description: |-
+        Allows authenticated users to search for other user profiles within the system.
+
+        You can filter the search using query parameters in the URL:
+        *   `email`: Find profiles where the email address contains the provided text (case-insensitive). Example: `?email=test.com`
+        *   `first_name`: Find profiles where the first name contains the provided text (case-insensitive). Example: `?first_name=jo`
+        *   `last_name`: Find profiles where the last name contains the provided text (case-insensitive). Example: `?last_name=smi`
+        You can combine multiple filters. The search returns profiles that match *all* provided filters.
+
+        Results are paginated to handle potentially large numbers of users:
+        *   `page`: Specifies which page of results to retrieve (starts at 1). Default is 1. Example: `?page=2`
+        *   `limit`: Specifies how many profiles to return per page. Default is 20, maximum is 100. Example: `?limit=50`
+
+        Example combining filters and pagination: `/profiles?first_name=a&page=1&limit=10` (Find profiles with 'a' in the first name, show the first 10 results).
+      parameters:
+      - description: Filter profiles where email contains this text (case-insensitive).
+        example: user@example.com
+        in: query
+        name: email
+        type: string
+      - description: Filter profiles where first name contains this text (case-insensitive).
+        example: John
+        in: query
+        name: first_name
+        type: string
+      - description: Filter profiles where last name contains this text (case-insensitive).
+        example: Doe
+        in: query
+        name: last_name
+        type: string
+      - default: 1
+        description: Page number for results (starts at 1).
+        example: 1
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 20
+        description: Number of profiles per page.
+        example: 20
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: A list of profiles matching the search criteria, along with
+            pagination details (total count, current page, limit).
+          schema:
+            $ref: '#/definitions/api.SearchProfilesResponse'
+        "400":
+          description: 'Bad Request: Invalid query parameters. ''page'' and ''limit''
+            must be positive integers. ''limit'' cannot exceed 100.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "401":
+          description: 'Unauthorized: Your access token is missing, invalid, or expired.
+            You need to be logged in to search profiles.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            while searching for profiles.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      security:
+      - BearerAuth: []
+      summary: Search User Profiles
+      tags:
+      - Profiles
+  /profiles/me:
+    delete:
+      description: |-
+        Permanently deletes the account and profile data for the currently logged-in user.
+
+        **WARNING: This action is irreversible!** Once you delete your account, all your data associated with it (profile, documents you own, etc.) will be removed.
+        *(Developer Note: Full cascading delete logic, like removing shared document access, might still be under development. Currently, it primarily removes the main profile record.)*
+        You must provide your valid access token to authorize this action.
+      responses:
+        "204":
+          description: Account Successfully Deleted. No content is returned in the
+            response body because the resource (your profile) no longer exists.
+        "401":
+          description: 'Unauthorized: Your access token is missing, invalid, or expired.
+            You need to be logged in to delete your account.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "404":
+          description: 'Not Found: The server couldn''t find your profile based on
+            your access token.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            while trying to delete your account (e.g., a database error).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      security:
+      - BearerAuth: []
+      summary: Delete Your Own Profile
+      tags:
+      - Profiles
+    get:
+      description: |-
+        Retrieves the profile details (like first name, last name, email, creation date) for the user who is currently logged in.
+
+        Think of this as your "My Account" page data. To use this endpoint, you must first authenticate (log in) to get an access token.
+        The server uses the access token you provide in the request header to figure out who you are and fetch your specific profile information from the database.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Your profile details were successfully retrieved. The response
+            body contains your profile information (excluding sensitive data like
+            the password hash).
+          schema:
+            $ref: '#/definitions/models.Profile'
+        "401":
+          description: 'Unauthorized: Your access token is missing, invalid, or expired.
+            You might need to log in again.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "404":
+          description: 'Not Found: The server couldn''t find a profile associated
+            with your access token. This is unusual if your token is valid.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            side (e.g., a database connection issue or a problem reading your user
+            ID from the token context).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      security:
+      - BearerAuth: []
+      summary: Get Your Own Profile
+      tags:
+      - Profiles
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Allows the currently logged-in user to update their own profile information.
+
+        You can change your `first_name`, `last_name`, and any custom `extra` data associated with your profile.
+        **Important:** You *cannot* change your email address or password using this endpoint. Password changes typically have a separate, more secure process (like a password reset flow).
+        You need to provide your current access token for authentication. The request body should contain the fields you want to update in JSON format.
+      parameters:
+      - description: The profile fields you want to update. 'first_name' and 'last_name'
+          are required.
+        in: body
+        name: profile
+        required: true
+        schema:
+          $ref: '#/definitions/api.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Your profile was successfully updated. The response body contains
+            the complete, updated profile.
+          schema:
+            $ref: '#/definitions/models.Profile'
+        "400":
+          description: 'Bad Request: The data you sent in the request body is invalid.
+            This could be due to missing required fields (''first_name'', ''last_name'')
+            or incorrect JSON formatting.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "401":
+          description: 'Unauthorized: Your access token is missing, invalid, or expired.
+            You need to be logged in to update your profile.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "404":
+          description: 'Not Found: The server couldn''t find your profile based on
+            your access token.'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+        "500":
+          description: 'Internal Server Error: Something went wrong on the server
+            while trying to update your profile (e.g., a database error).'
+          schema:
+            $ref: '#/definitions/utils.APIError'
+      security:
+      - BearerAuth: []
+      summary: Update Your Own Profile
+      tags:
+      - Profiles
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

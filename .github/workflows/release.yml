@@ -1,0 +1,124 @@
+# .github/workflows/release.yml
+name: Test, Build and Release
+
+on:
+  push:
+    branches:
+      - '**' # Run tests on all branches
+  pull_request:
+    branches:
+      - main # Run tests on PRs targeting main
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22' # Specify your Go version
+
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Run tests
+        run: go test ./...
+
+  build:
+    name: Build Binaries
+    needs: test # Run after tests pass
+    if: github.ref == 'refs/heads/main' # Only run on main branch pushes
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, windows, darwin]
+        goarch: [amd64] # Assuming amd64 for all, adjust if needed
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22' # Specify your Go version
+
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -v -o docserver-${{ matrix.goos }}-${{ matrix.goarch }} main.go
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docserver-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: docserver-${{ matrix.goos }}-${{ matrix.goarch }}* # Include potential .exe extension for windows
+
+  release:
+    name: Create Release
+    needs: build # Run after build finishes
+    if: github.ref == 'refs/heads/main' # Only run on main branch pushes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to create releases
+      pull-requests: read # Needed for conventional commits analysis
+      # Required by release-please v4
+      id-token: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for conventional commits history analysis
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts # Download all artifacts to a directory
+
+      - name: List downloaded artifacts # Optional: for debugging
+        run: ls -R artifacts
+
+      - name: Set up Go for release tool (if needed)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      # Using google-github-actions/release-please-action as an example
+      # You might prefer a different conventional commit release action
+      - name: Create Release using release-please
+        id: release
+        uses: google-github-actions/release-please-action@v4
+        with:
+          release-type: go
+          # Optional: specify package name if not root
+          # package-name: your-package-name
+          # Optional: configure how release-please finds files
+          # extra-files: |
+          #   path/to/your/version/file.json:$.version
+          #   another/file
+
+      # Upload assets to the release created by release-please
+      # This step assumes release-please created a release and outputted upload_url
+      - name: Upload Release Assets
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Use gh cli or another tool to upload assets from the 'artifacts' directory
+          # Example using gh cli (ensure it's available or install it)
+          # sudo apt-get update && sudo apt-get install -y gh
+          # Find all artifact directories (e.g., artifacts/docserver-linux-amd64)
+          # and upload the binary within each
+          for dir in artifacts/*; do
+            if [ -d "$dir" ]; then
+              asset_path=$(find "$dir" -maxdepth 1 -type f -name 'docserver-*' | head -n 1)
+              if [ -n "$asset_path" ]; then
+                echo "Uploading $asset_path"
+                gh release upload ${{ steps.release.outputs.tag_name }} "$asset_path" --clobber
+              else
+                echo "No binary found in $dir"
+              fi
+            fi
+          done
