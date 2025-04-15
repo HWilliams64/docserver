@@ -7,7 +7,6 @@ on:
       - '**' # Run tests on all branches
     paths:
       - .github/workflows/**
-      - release-please-config.json
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
@@ -16,7 +15,6 @@ on:
       - main # Run tests on PRs targeting main
     paths:
       - .github/workflows/**
-      - release-please-config.json
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
@@ -94,10 +92,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # Needed to create releases
-      pull-requests: write # Needed to create the release PR
-      issues: write # Needed to add labels to the release PR
-      # Required by release-please v4
-      id-token: write
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -112,104 +106,20 @@ jobs:
       - name: List downloaded artifacts # Optional: for debugging
         run: ls -R artifacts
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Conventional Changelog Action
+        id: changelog
+        uses: TriPSs/conventional-changelog-action@v5
         with:
-          node-version: '20' # Or your preferred Node.js version
+          github-token: ${{ secrets.github_token }}
+          skip-commit: "true"
+          skip-version-file: "true"
+          output-file: "false"
 
-      - name: Install release-please
-        run: npm install -g release-please
-
-      - name: Set up Go for swag
-        uses: actions/setup-go@v5
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          go-version: '1.22'
-          cache: true
-          cache-dependency-path: go.sum
-
-      # Using google-github-actions/release-please-action as an example
-      # You might prefer a different conventional commit release action
-      - name: Create Release using release-please
-        id: release
-        uses: googleapis/release-please-action@v4
-        with:
-          release-type: go
-          # Optional: specify package name if not root
-          # package-name: your-package-name
-          # Optional: configure how release-please finds files
-          # extra-files: |
-          #   path/to/your/version/file.json:$.version
-          #   another/file
-
-      # --- Custom Steps Start ---
-
-      - name: Update main.go version and run swag init
-        # Run only if release-please detected a new version to release
-        if: ${{ steps.release.outputs.releases_created }}
-        run: |
-          echo "Updating version in main.go to ${{ steps.release.outputs.version }}"
-          # Use sed to replace the version line. Adjust line number if needed.
-          # Assumes version format like 1.2.3 (no 'v' prefix from steps.release.outputs.version)
-          sed -i "s|// @version .*|// @version         ${{ steps.release.outputs.version }}|g" main.go
-
-          echo "Installing swag..."
-          go install github.com/swaggo/swag/cmd/swag@latest
-          export PATH=$(go env GOPATH)/bin:$PATH
-
-          echo "Running swag init..."
-          swag init
-
-      - name: Commit version update and docs regeneration
-        if: ${{ steps.release.outputs.releases_created }}
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          echo "Staging changes..."
-          # Add main.go and the potentially changed docs files
-          git add main.go docs/docs.go docs/swagger.json docs/swagger.yaml
-          # Check if there are staged changes before committing
-          if ! git diff --staged --quiet; then
-            echo "Committing changes..."
-            git commit -m "chore(release): bump version to ${{ steps.release.outputs.tag_name }} and regenerate docs" -m "Released via release-please."
-            # Push changes back? release-please github-release might handle this implicitly
-            # git push origin ${{ github.ref_name }} # Push commit to the branch (e.g., main)
-          else
-            echo "No changes to commit."
-          fi
-
-      # --- Custom Steps End ---
-
-      # Create the actual GitHub release using the tag version from the manifest step
-      # and the commit created in the previous step.
-      - name: Create GitHub Release using release-please
-        id: github_release # New ID for this step
-        if: ${{ steps.release.outputs.releases_created }} # Only run if manifest found a release
-        uses: googleapis/release-please-action@v4
-      # Upload assets to the release created by release-please
-      # This step assumes release-please created a release
-      - name: Install GitHub CLI
-        if: ${{ steps.release.outputs.releases_created }} # Only if a release is happening
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gh
-      - name: Upload Release Assets
-        if: ${{ steps.release.outputs.releases_created }} # Use output from the first release-please step
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Use gh cli or another tool to upload assets from the 'artifacts' directory
-          # Example using gh cli (ensure it's available or install it)
-          # sudo apt-get update && sudo apt-get install -y gh
-          # Find all artifact directories (e.g., artifacts/docserver-linux-amd64)
-          # and upload the binary within each
-          for dir in artifacts/*; do
-            if [ -d "$dir" ]; then
-              asset_path=$(find "$dir" -maxdepth 1 -type f -name 'docserver-*' | head -n 1)
-              if [ -n "$asset_path" ]; then
-                echo "Uploading $asset_path"
-                gh release upload ${{ steps.release.outputs.tag_name }} "$asset_path" --clobber # Use output from the first release-please step
-              else
-                echo "No binary found in $dir"
-              fi
-            fi
-          done
+          tag_name: ${{ steps.changelog.outputs.tag }}
+          name: ${{ steps.changelog.outputs.tag }} # Use tag for release name
+          body: ${{ steps.changelog.outputs.clean_changelog }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: artifacts/**/* # Upload all files from the artifacts directory
