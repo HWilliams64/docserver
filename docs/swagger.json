@@ -8,7 +8,7 @@
             "name": "MIT",
             "url": "https://github.com/HWilliams64/docserver/blob/main/License.md"
         },
-        "version": "1.0"
+        "version": "1.0.1"
     },
     "host": "localhost:8080",
     "basePath": "/",
