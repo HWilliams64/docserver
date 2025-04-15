@@ -133,7 +133,6 @@ jobs:
         id: release
         uses: googleapis/release-please-action@v4
         with:
-          command: release-please manifest # Determine version, update changelog, output version info
           release-type: go
           # Optional: specify package name if not root
           # package-name: your-package-name
@@ -186,9 +185,6 @@ jobs:
         id: github_release # New ID for this step
         if: steps.release.outputs.releases_created == 'true' # Only run if manifest found a release
         uses: googleapis/release-please-action@v4
-        with:
-          command: github-release # Create the GitHub release
-          # release-please should automatically pick up the version/tag from the manifest run context
       # Upload assets to the release created by release-please
       # This step assumes release-please created a release and outputted upload_url
       - name: Upload Release Assets
