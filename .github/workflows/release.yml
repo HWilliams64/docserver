@@ -177,7 +177,7 @@ jobs:
           sed -i "s|// @version .*|// @version         ${{ steps.check_release.outputs.version }}|g" main.go
 
           echo "Installing swag..."
-          go install github.com/swaggo/swag/cmd/swag@latest
+          go install github.com/swaggo/swag/cmd/swag@v1.16.1
           export PATH=$(go env GOPATH)/bin:$PATH
 
           echo "Running swag init..."
