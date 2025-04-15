@@ -5,9 +5,17 @@ on:
   push:
     branches:
       - '**' # Run tests on all branches
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
   pull_request:
     branches:
       - main # Run tests on PRs targeting main
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
 
 jobs:
   test:
@@ -18,6 +26,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22' # Specify your Go version
+          cache: true
 
       - name: Check out code
         uses: actions/checkout@v4
@@ -39,6 +48,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22' # Specify your Go version
+          cache: true
 
       - name: Check out code
         uses: actions/checkout@v4
@@ -63,7 +73,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # Needed to create releases
-      pull-requests: read # Needed for conventional commits analysis
+      pull-requests: write # Needed to create the release PR
       # Required by release-please v4
       id-token: write
     steps:
@@ -83,13 +93,14 @@ jobs:
       - name: Set up Go for release tool (if needed)
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.22'
+          cache: true
 
       # Using google-github-actions/release-please-action as an example
       # You might prefer a different conventional commit release action
       - name: Create Release using release-please
         id: release
-        uses: google-github-actions/release-please-action@v4
+        uses: googleapis/release-please-action@v4
         with:
           release-type: go
           # Optional: specify package name if not root
