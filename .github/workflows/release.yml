@@ -29,6 +29,7 @@ jobs:
         with:
           go-version: '1.22' # Specify your Go version
           cache: true
+          cache-dependency-path: go.sum
 
       - name: Check out code
         uses: actions/checkout@v4
@@ -51,6 +52,7 @@ jobs:
         with:
           go-version: '1.22' # Specify your Go version
           cache: true
+          cache-dependency-path: go.sum
 
       - name: Check out code
         uses: actions/checkout@v4
@@ -76,6 +78,7 @@ jobs:
     permissions:
       contents: write # Needed to create releases
       pull-requests: write # Needed to create the release PR
+      issues: write # Needed to add labels to the release PR
       # Required by release-please v4
       id-token: write
     steps:
@@ -97,6 +100,7 @@ jobs:
         with:
           go-version: '1.22'
           cache: true
+          cache-dependency-path: go.sum
 
       # Using google-github-actions/release-please-action as an example
       # You might prefer a different conventional commit release action
