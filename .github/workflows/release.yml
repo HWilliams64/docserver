@@ -186,9 +186,14 @@ jobs:
         if: steps.release.outputs.releases_created == 'true' # Only run if manifest found a release
         uses: googleapis/release-please-action@v4
       # Upload assets to the release created by release-please
-      # This step assumes release-please created a release and outputted upload_url
+      # This step assumes release-please created a release
+      - name: Install GitHub CLI
+        if: steps.release.outputs.releases_created == 'true' # Only if a release is happening
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh
       - name: Upload Release Assets
-        if: steps.github_release.outputs.release_created == 'true' # Use output from github-release step
+        if: steps.release.outputs.releases_created == 'true' # Use output from the first release-please step
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -202,7 +207,7 @@ jobs:
               asset_path=$(find "$dir" -maxdepth 1 -type f -name 'docserver-*' | head -n 1)
               if [ -n "$asset_path" ]; then
                 echo "Uploading $asset_path"
-                gh release upload ${{ steps.github_release.outputs.tag_name }} "$asset_path" --clobber # Use output from github-release step
+                gh release upload ${{ steps.release.outputs.tag_name }} "$asset_path" --clobber # Use output from the first release-please step
               else
                 echo "No binary found in $dir"
               fi
