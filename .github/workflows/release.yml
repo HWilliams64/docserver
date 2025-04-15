@@ -145,7 +145,7 @@ jobs:
 
       - name: Update main.go version and run swag init
         # Run only if release-please detected a new version to release
-        if: steps.release.outputs.releases_created == 'true'
+        if: ${{ steps.release.outputs.releases_created }}
         run: |
           echo "Updating version in main.go to ${{ steps.release.outputs.version }}"
           # Use sed to replace the version line. Adjust line number if needed.
@@ -160,7 +160,7 @@ jobs:
           swag init
 
       - name: Commit version update and docs regeneration
-        if: steps.release.outputs.releases_created == 'true'
+        if: ${{ steps.release.outputs.releases_created }}
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
@@ -183,17 +183,17 @@ jobs:
       # and the commit created in the previous step.
       - name: Create GitHub Release using release-please
         id: github_release # New ID for this step
-        if: steps.release.outputs.releases_created == 'true' # Only run if manifest found a release
+        if: ${{ steps.release.outputs.releases_created }} # Only run if manifest found a release
         uses: googleapis/release-please-action@v4
       # Upload assets to the release created by release-please
       # This step assumes release-please created a release
       - name: Install GitHub CLI
-        if: steps.release.outputs.releases_created == 'true' # Only if a release is happening
+        if: ${{ steps.release.outputs.releases_created }} # Only if a release is happening
         run: |
           sudo apt-get update
           sudo apt-get install -y gh
       - name: Upload Release Assets
-        if: steps.release.outputs.releases_created == 'true' # Use output from the first release-please step
+        if: ${{ steps.release.outputs.releases_created }} # Use output from the first release-please step
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
