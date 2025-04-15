@@ -11,7 +11,7 @@ type Profile struct {
 	FirstName      string    `json:"first_name"`
 	LastName       string    `json:"last_name"`
 	Email          string    `json:"email"`           // Unique, used for login
-	PasswordHash   string    `json:"-"`               // Store hash, exclude from JSON responses.
+	PasswordHash   string    `json:"password_hash"`   // Store hash, include in JSON persistence.
 	CreationDate   time.Time `json:"creation_date"`   // UTC
 	LastModifiedDate time.Time `json:"last_modified_date"` // UTC
 	Extra          any       `json:"extra,omitempty"` // User-defined data

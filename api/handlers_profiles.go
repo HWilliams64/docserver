@@ -10,11 +10,23 @@ import (
 	"sort" // Added for sorting profiles
 	"strconv"
 	"strings"
+	"time" // Added for ProfileResponse
 
 	"github.com/gin-gonic/gin"
 )
 
 // --- Get Current Profile ---
+
+// ProfileResponse defines the data returned for profile endpoints (omits hash).
+type ProfileResponse struct {
+	ID             string    `json:"id"`
+	FirstName      string    `json:"first_name"`
+	LastName       string    `json:"last_name"`
+	Email          string    `json:"email"`
+	CreationDate   time.Time `json:"creation_date"`
+	LastModifiedDate time.Time `json:"last_modified_date"`
+	Extra          any       `json:"extra,omitempty"`
+}
 
 // GetProfileMeHandler retrieves the profile of the currently authenticated user.
 // @Summary      Get Your Own Profile
@@ -51,8 +63,19 @@ func GetProfileMeHandler(c *gin.Context, database *db.Database, cfg *config.Conf
 		return
 	}
 
-	// Return profile (PasswordHash is excluded by `json:"-"`)
-	c.JSON(http.StatusOK, profile)
+	// Create response object excluding the hash
+	response := ProfileResponse{
+		ID:             profile.ID,
+		FirstName:      profile.FirstName,
+		LastName:       profile.LastName,
+		Email:          profile.Email,
+		CreationDate:   profile.CreationDate,
+		LastModifiedDate: profile.LastModifiedDate,
+		Extra:          profile.Extra,
+	}
+
+	// Return the response object
+	c.JSON(http.StatusOK, response)
 }
 
 // --- Update Profile ---
@@ -126,8 +149,18 @@ func UpdateProfileMeHandler(c *gin.Context, database *db.Database, cfg *config.C
 		return
 	}
 
-	// Return the updated profile
-	c.JSON(http.StatusOK, updatedProfile)
+	// Create response object excluding the hash
+	response := ProfileResponse{
+		ID:             updatedProfile.ID,
+		FirstName:      updatedProfile.FirstName,
+		LastName:       updatedProfile.LastName,
+		Email:          updatedProfile.Email,
+		CreationDate:   updatedProfile.CreationDate,
+		LastModifiedDate: updatedProfile.LastModifiedDate,
+		Extra:          updatedProfile.Extra,
+	}
+	// Return the updated profile response
+	c.JSON(http.StatusOK, response)
 }
 
 // --- Delete Profile ---
@@ -180,7 +213,7 @@ func DeleteProfileMeHandler(c *gin.Context, database *db.Database, cfg *config.C
 
 // SearchProfilesResponse defines the structure for the paginated profile search results.
 type SearchProfilesResponse struct {
-	Data  []models.Profile `json:"data"`
+	Data  []ProfileResponse `json:"data"`
 	Total int              `json:"total"`
 	Page  int              `json:"page"`
 	Limit int              `json:"limit"`
@@ -238,7 +271,7 @@ func SearchProfilesHandler(c *gin.Context, database *db.Database, cfg *config.Co
 	allProfiles := database.GetAllProfiles()
 
 	// Filter based on query params (case-insensitive contains)
-	filteredProfiles := make([]models.Profile, 0)
+	filteredProfiles := make([]ProfileResponse, 0)
 	for _, profile := range allProfiles {
 		match := true
 		if emailQuery != "" && !strings.Contains(strings.ToLower(profile.Email), strings.ToLower(emailQuery)) {
@@ -252,7 +285,17 @@ func SearchProfilesHandler(c *gin.Context, database *db.Database, cfg *config.Co
 		}
 
 		if match {
-			filteredProfiles = append(filteredProfiles, profile)
+			// Create response object excluding the hash
+			responseProfile := ProfileResponse{
+				ID:             profile.ID,
+				FirstName:      profile.FirstName,
+				LastName:       profile.LastName,
+				Email:          profile.Email,
+				CreationDate:   profile.CreationDate,
+				LastModifiedDate: profile.LastModifiedDate,
+				Extra:          profile.Extra,
+			}
+			filteredProfiles = append(filteredProfiles, responseProfile)
 		}
 	}
 

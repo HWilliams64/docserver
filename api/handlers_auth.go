@@ -22,6 +22,17 @@ type SignupRequest struct {
 	Extra     any    `json:"extra,omitempty"`
 }
 
+// SignupResponse defines the data returned after successful signup (omits hash).
+type SignupResponse struct {
+	ID             string    `json:"id"`
+	FirstName      string    `json:"first_name"`
+	LastName       string    `json:"last_name"`
+	Email          string    `json:"email"`
+	CreationDate   time.Time `json:"creation_date"`
+	LastModifiedDate time.Time `json:"last_modified_date"`
+	Extra          any       `json:"extra,omitempty"`
+}
+
 // SignupHandler handles user registration.
 // @Summary      Register a New User Account
 // @Description  Creates a new user profile in the system. This is the first step for a new user to start using the service.
@@ -84,8 +95,19 @@ func SignupHandler(c *gin.Context, database *db.Database, cfg *config.Config) {
 	// Important: Do NOT return the password hash in the response.
 	// The Profile struct already has `json:"-"` on PasswordHash.
 
-	// Return the created profile (without hash)
-	c.JSON(http.StatusCreated, createdProfile)
+	// Create response object excluding the hash
+	response := SignupResponse{
+		ID:             createdProfile.ID,
+		FirstName:      createdProfile.FirstName,
+		LastName:       createdProfile.LastName,
+		Email:          createdProfile.Email,
+		CreationDate:   createdProfile.CreationDate,
+		LastModifiedDate: createdProfile.LastModifiedDate,
+		Extra:          createdProfile.Extra,
+	}
+
+	// Return the response object
+	c.JSON(http.StatusCreated, response)
 }
 
 // --- Login Handler (Placeholder) ---
