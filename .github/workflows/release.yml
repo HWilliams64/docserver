@@ -123,7 +123,7 @@ jobs:
         id: release
         uses: googleapis/release-please-action@v4
         with:
-          command: release-please release # Create release directly, skip PR
+          command: release-please manifest # Determine version, update changelog, output version info
           release-type: go
           # Optional: specify package name if not root
           # package-name: your-package-name
@@ -132,10 +132,57 @@ jobs:
           #   path/to/your/version/file.json:$.version
           #   another/file
 
+      # --- Custom Steps Start ---
+
+      - name: Update main.go version and run swag init
+        # Run only if release-please detected a new version to release
+        if: steps.release.outputs.releases_created == 'true'
+        run: |
+          echo "Updating version in main.go to ${{ steps.release.outputs.version }}"
+          # Use sed to replace the version line. Adjust line number if needed.
+          # Assumes version format like 1.2.3 (no 'v' prefix from steps.release.outputs.version)
+          sed -i "s|// @version .*|// @version         ${{ steps.release.outputs.version }}|g" main.go
+
+          echo "Installing swag..."
+          go install github.com/swaggo/swag/cmd/swag@latest
+          export PATH=$(go env GOPATH)/bin:$PATH
+
+          echo "Running swag init..."
+          swag init
+
+      - name: Commit version update and docs regeneration
+        if: steps.release.outputs.releases_created == 'true'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          echo "Staging changes..."
+          # Add main.go and the potentially changed docs files
+          git add main.go docs/docs.go docs/swagger.json docs/swagger.yaml
+          # Check if there are staged changes before committing
+          if ! git diff --staged --quiet; then
+            echo "Committing changes..."
+            git commit -m "chore(release): bump version to ${{ steps.release.outputs.tag_name }} and regenerate docs" -m "Released via release-please."
+            # Push changes back? release-please github-release might handle this implicitly
+            # git push origin ${{ github.ref_name }} # Push commit to the branch (e.g., main)
+          else
+            echo "No changes to commit."
+          fi
+
+      # --- Custom Steps End ---
+
+      # Create the actual GitHub release using the tag version from the manifest step
+      # and the commit created in the previous step.
+      - name: Create GitHub Release using release-please
+        id: github_release # New ID for this step
+        if: steps.release.outputs.releases_created == 'true' # Only run if manifest found a release
+        uses: googleapis/release-please-action@v4
+        with:
+          command: github-release # Create the GitHub release
+          # release-please should automatically pick up the version/tag from the manifest run context
       # Upload assets to the release created by release-please
       # This step assumes release-please created a release and outputted upload_url
       - name: Upload Release Assets
-        if: steps.release.outputs.release_created == 'true'
+        if: steps.github_release.outputs.release_created == 'true' # Use output from github-release step
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -149,7 +196,7 @@ jobs:
               asset_path=$(find "$dir" -maxdepth 1 -type f -name 'docserver-*' | head -n 1)
               if [ -n "$asset_path" ]; then
                 echo "Uploading $asset_path"
-                gh release upload ${{ steps.release.outputs.tag_name }} "$asset_path" --clobber
+                gh release upload ${{ steps.github_release.outputs.tag_name }} "$asset_path" --clobber # Use output from github-release step
               else
                 echo "No binary found in $dir"
               fi
