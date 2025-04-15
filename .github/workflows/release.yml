@@ -150,24 +150,29 @@ jobs:
           echo "Running swag init..."
           swag init
 
-      - name: Commit version update and docs regeneration
+      - name: Commit Changelog, Version Update, and Docs Regeneration
         if: steps.release.outputs.releases_created == 'true'
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           echo "Staging changes..."
-          # Add main.go and the potentially changed docs files
-          git add main.go docs/docs.go docs/swagger.json docs/swagger.yaml
+          # Add CHANGELOG.md (updated by manifest), main.go, and docs files
+          git add CHANGELOG.md main.go docs/docs.go docs/swagger.json docs/swagger.yaml
+
           # Check if there are staged changes before committing
-          if ! git diff --staged --quiet; then
+          # Use git status --porcelain to reliably check for changes
+          if [ -n "$(git status --porcelain)" ]; then
             echo "Committing changes..."
-            git commit -m "chore(release): bump version to ${{ steps.release.outputs.tag_name }} and regenerate docs" -m "Released via release-please."
-            # Push changes back? release-please github-release might handle this implicitly
-            # git push origin ${{ github.ref_name }} # Push commit to the branch (e.g., main)
+            # Use the tag_name from release-please for the commit message
+            git commit -m "chore(release): ${{ steps.release.outputs.tag_name }}" -m "Update version, regenerate docs, and update changelog."
+
+            echo "Pushing commit..."
+            # Push the commit to the current branch (e.g., main)
+            # This is crucial for github-release to find the commit
+            git push origin ${{ github.ref_name }}
           else
             echo "No changes to commit."
           fi
-
       # --- Custom Steps End ---
 
       # Create the actual GitHub release using the tag version from the manifest step
