@@ -10,15 +10,10 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "termsOfService": "http://swagger.io/terms/",
-        "contact": {
-            "name": "API Support",
-            "url": "http://www.swagger.io/support",
-            "email": "support@swagger.io"
-        },
+        "contact": {},
         "license": {
-            "name": "Apache 2.0",
-            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+            "name": "MIT",
+            "url": "https://github.com/HWilliams64/docserver/blob/main/License.md"
         },
         "version": "{{.Version}}"
     },
@@ -1176,6 +1171,30 @@ const docTemplate = `{
                 }
             }
         },
+        "api.ProfileResponse": {
+            "type": "object",
+            "properties": {
+                "creation_date": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "extra": {},
+                "first_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_modified_date": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                }
+            }
+        },
         "api.ResetPasswordRequest": {
             "type": "object",
             "required": [
@@ -1202,7 +1221,7 @@ const docTemplate = `{
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.Profile"
+                        "$ref": "#/definitions/api.ProfileResponse"
                     }
                 },
                 "limit": {
@@ -1333,6 +1352,10 @@ const docTemplate = `{
                 },
                 "last_name": {
                     "type": "string"
+                },
+                "password_hash": {
+                    "description": "Store hash, include in JSON persistence.",
+                    "type": "string"
                 }
             }
         },
@@ -1344,25 +1367,17 @@ const docTemplate = `{
                 }
             }
         }
-    },
-    "securityDefinitions": {
-        "BearerAuth": {
-            "description": "Type \"Bearer\" followed by a space and JWT token.",
-            "type": "apiKey",
-            "name": "Authorization",
-            "in": "header"
-        }
     }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
-	Host:             "0.0.0.0:8080",
+	Host:             "localhost:8080",
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "DocServer API",
-	Description:      "## DocServer API\n\n**Purpose:** This is a simple API server designed for **academic and educational purposes only**. It demonstrates basic concepts of user authentication, document storage (as JSON), document sharing, and content-based querying. **It is NOT intended for production use.**\n\n**High-Level Overview:**\nDocServer allows users to:\n*   Register and log in to manage their accounts.\n*   Create, retrieve, update, and delete documents. Document content can be any valid JSON structure.\n*   Share their documents with other registered users.\n*   Search for documents they have access to, including powerful filtering based on the document's JSON content.\n\n**Content Querying (`content_query` parameter):**\nThe `GET /documents` endpoint supports filtering documents based on their content using the `content_query` parameter. This allows you to search for documents where specific fields within the JSON content match certain criteria.\n\n**Query Syntax:**\nEach `content_query` parameter string follows the format: `path operator value`\n\n*   **`path`**: A dot-separated path to navigate the JSON structure (e.g., `user.name`, `details.metadata.version`). Use numeric indices for arrays (e.g., `items.0.id`, `tags.1`).\n*   **`operator`**: The comparison operator. Supported operators include:\n*   `eq`: Equal to (strings, numbers, booleans, null)\n*   `ne`: Not equal to\n*   `gt`: Greater than (numbers)\n*   `gte`: Greater than or equal to (numbers)\n*   `lt`: Less than (numbers)\n*   `lte`: Less than or equal to (numbers)\n*   `contains`: String contains substring (case-sensitive)\n*   `startswith`: String starts with prefix (case-sensitive)\n*   `endswith`: String ends with suffix (case-sensitive)\n*   **`value`**: The value to compare against.\n*   Strings MUST be enclosed in double quotes (e.g., `\\\"John Doe\\\"`). Remember to URL-encode the query parameter string.\n*   Numbers (e.g., `123`, `45.6`), booleans (`true`/`false`), and `null` should be used directly.\n\n**Logical Operators (Combining Queries):**\nYou combine multiple conditions by providing multiple `content_query` parameters.\n*   **`AND` (Implicit):** By default, consecutive `path operator value` queries are joined by `AND`. The document must match *all* conditions.\n*   **`OR` (Explicit):** To use `OR`, add `content_query=OR` *before* the condition you want to link with OR. The `OR` applies between the condition *before* it and the condition *after* it.\n\n**Examples:**\n\n*Assume document content like:*\n```json\n{\n\"project\": \"Alpha\",\n\"status\": \"active\",\n\"priority\": 5,\n\"assignee\": { \"name\": \"Alice\", \"email\": \"alice@example.com\" },\n\"tags\": [\"urgent\", \"backend\"],\n\"metadata\": { \"version\": 1.2, \"reviewed\": true }\n}\n```\n\n1.  **Simple Equality:** Find documents where `status` is `active`.\n`?content_query=status eq \\\"active\\\"`\n\n2.  **Numeric Comparison:** Find documents where `priority` is greater than or equal to `5`.\n`?content_query=priority gte 5`\n\n3.  **Nested Field:** Find documents assigned to `Alice`.\n`?content_query=assignee.name eq \\\"Alice\\\"`\n\n4.  **Array Element:** Find documents where the first tag is `urgent`.\n`?content_query=tags.0 eq \\\"urgent\\\"`\n\n5.  **Implicit `AND`:** Find documents for project `Alpha` **AND** status `active`.\n`?content_query=project eq \\\"Alpha\\\"&content_query=status eq \\\"active\\\"`\n\n6.  **Explicit `OR`:** Find documents where status is `active` **OR** priority is less than `3`.\n`?content_query=status eq \\\"active\\\"&content_query=OR&content_query=priority lt 3`\n\n7.  **Combined `AND` and `OR`:** Find documents where (project is `Alpha` **AND** status is `active`) **OR** (priority is `10`).\n`?content_query=project eq \\\"Alpha\\\"&content_query=status eq \\\"active\\\"&content_query=OR&content_query=priority eq 10`\n*(Explanation: `project eq \"Alpha\"` AND `status eq \"active\"` are grouped implicitly. The `OR` then links this group to `priority eq 10`.)*\n\n8.  **Nested Field with `AND`:** Find documents where `assignee.name` is `Alice` **AND** `metadata.reviewed` is `true`.\n`?content_query=assignee.name eq \\\"Alice\\\"&content_query=metadata.reviewed eq true`",
+	Description:      "Type \"Bearer\" followed by a space and JWT token.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 }
