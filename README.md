@@ -164,7 +164,7 @@ formats, and includes the specifics of the `content_query` syntax.
 
 #### Prerequisites
 
-*   Go (version 1.18 or later recommended)
+*   Go (version 1.22 or later recommended)
 
 #### Running the Server
 
