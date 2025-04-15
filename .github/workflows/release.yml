@@ -108,6 +108,7 @@ jobs:
         id: release
         uses: googleapis/release-please-action@v4
         with:
+          command: release-please release # Create release directly, skip PR
           release-type: go
           # Optional: specify package name if not root
           # package-name: your-package-name
