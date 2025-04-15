@@ -58,17 +58,32 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build
+        id: build # Add an ID to reference outputs
         run: |
-          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -v -o docserver-${{ matrix.goos }}-${{ matrix.goarch }} main.go
+          OUTPUT_NAME="docserver-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            OUTPUT_NAME="${OUTPUT_NAME}.exe"
+          fi
+          # Set output for subsequent steps
+          echo "OUTPUT_NAME=${OUTPUT_NAME}" >> $GITHUB_OUTPUT
+          echo "Building $OUTPUT_NAME..."
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -v -o "$OUTPUT_NAME" main.go
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
 
+      - name: Make executable (Linux/Mac)
+        # Only run for linux or darwin GOOS
+        if: matrix.goos == 'linux' || matrix.goos == 'darwin'
+        run: chmod +x ${{ steps.build.outputs.OUTPUT_NAME }}
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
+          # Use the same artifact name regardless of OS for easier downloading
           name: docserver-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: docserver-${{ matrix.goos }}-${{ matrix.goarch }}* # Include potential .exe extension for windows
+          # Upload the specific file that was built
+          path: ${{ steps.build.outputs.OUTPUT_NAME }}
 
   release:
     name: Create Release
