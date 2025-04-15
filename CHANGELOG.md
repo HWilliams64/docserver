@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.3](https://github.com/HWilliams64/docserver/compare/v1.0.2...v1.0.3) (2025-04-15)
+
+
+### Bug Fixes
+
+* **ci:** :construction_worker: fixed missing binary artifacts issue in release ([b4c9aa3](https://github.com/HWilliams64/docserver/commit/b4c9aa3a1954bada15ddf8c78a7232cc4e749407))
+* **ci:** :construction_worker: fixed missing binary artifacts issue in release ([4d30d7d](https://github.com/HWilliams64/docserver/commit/4d30d7da2a068349664acd6008ae5561e9987537))
+
 ## [1.0.2](https://github.com/HWilliams64/docserver/compare/v1.0.1...v1.0.2) (2025-04-15)
 
 
