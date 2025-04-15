@@ -45,7 +45,7 @@ jobs:
     strategy:
       matrix:
         goos: [linux, windows, darwin]
-        goarch: [amd64] # Assuming amd64 for all, adjust if needed
+        goarch: [amd64, arm64] # Add arm64 architecture
     steps:
       - name: Set up Go
         uses: actions/setup-go@v5
