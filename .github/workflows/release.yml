@@ -133,32 +133,38 @@ jobs:
         id: check_release
         run: |
           set -e # Exit on error
-          # Run release-please manifest. It will exit with 0 if no release needed, non-zero otherwise.
-          # Capture output to check for version info if a release IS needed.
-          # Use GITHUB_TOKEN for authentication
-          if output=$(release-please manifest --token=${{ secrets.GITHUB_TOKEN }} --config-file .github/workflows/release-please-config.json --no-signoff --print-manifest-path 2>&1); then
+          # Install jq first
+          sudo apt-get update && sudo apt-get install -y jq
+
+          # Run release-please manifest in dry-run JSON mode to check for pending release and get version
+          # It exits 0 if no release needed, non-zero if release is needed.
+          # Capture JSON output on stderr (redirect stderr to stdout)
+          if output=$(release-please manifest --token=${{ secrets.GITHUB_TOKEN }} --config-file .github/workflows/release-please-config.json --dry-run --json 2>&1); then
+            # Exit code 0 means no release needed
             echo "No release needed."
             echo "release_needed=false" >> $GITHUB_OUTPUT
           else
-            # If manifest command failed (meaning a release IS needed), extract version
-            echo "Release needed. Output:"
-            echo "$output"
-            # Extract version (assuming format like "Created manifest at: .manifest.json")
-            # This might need adjustment based on actual output format
-            manifest_path=$(echo "$output" | grep -oP '\.manifest\.json$') || true # Get manifest path
-            if [[ -z "$manifest_path" ]]; then manifest_path=".release-please-manifest.json"; fi # Default if grep fails
-            echo "Manifest path: $manifest_path"
-            # Extract version from the generated manifest file (more reliable)
-            # Requires jq
-            sudo apt-get update && sudo apt-get install -y jq
-            version=$(jq -r '."." // empty' "$manifest_path")
-            tag_name="v$version" # Construct tag name
-
-            if [[ -z "$version" ]]; then
-              echo "Error: Could not extract version from manifest."
+            # Non-zero exit code means release is needed. The JSON output is in $output.
+            # Check if the output is valid JSON before parsing
+            if ! echo "$output" | jq empty; then
+              echo "Error: release-please output was not valid JSON:"
+              echo "$output"
               exit 1
             fi
 
+            echo "Release needed. release-please output:"
+            echo "$output"
+
+            # Extract the proposed version for the root component (".") from the JSON output
+            version=$(echo "$output" | jq -r '."." // empty')
+
+            if [[ -z "$version" ]]; then
+              echo "Error: Could not extract version from release-please JSON output."
+              echo "Output was: $output"
+              exit 1
+            fi
+
+            tag_name="v$version" # Construct tag name
             echo "Proposed version: $version"
             echo "Proposed tag: $tag_name"
             echo "release_needed=true" >> $GITHUB_OUTPUT
