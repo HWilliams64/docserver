@@ -127,105 +127,78 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      # Run manifest command to check if release is needed and get version info
-      # Use --no-signoff to prevent commit, --print-manifest-path to get output easily
-      - name: Check for pending release and get version
-        id: check_release
-        run: |
-          set -e # Exit on error
-          # Install jq first
-          sudo apt-get update && sudo apt-get install -y jq
+      # Using google-github-actions/release-please-action as an example
+      # You might prefer a different conventional commit release action
+      - name: Create Release using release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          command: release-please manifest # Determine version, update changelog, output version info
+          release-type: go
+          # Optional: specify package name if not root
+          # package-name: your-package-name
+          # Optional: configure how release-please finds files
+          # extra-files: |
+          #   path/to/your/version/file.json:$.version
+          #   another/file
 
-          # Run release-please manifest in dry-run JSON mode to check for pending release and get version
-          # It exits 0 if no release needed, non-zero if release is needed.
-          # Capture JSON output on stderr (redirect stderr to stdout)
-          if output=$(release-please manifest --token=${{ secrets.GITHUB_TOKEN }} --config-file .github/workflows/release-please-config.json --dry-run --json 2>&1); then
-            # Exit code 0 means no release needed
-            echo "No release needed."
-            echo "release_needed=false" >> $GITHUB_OUTPUT
-          else
-            # Non-zero exit code means release is needed. The JSON output is in $output.
-            # Check if the output is valid JSON before parsing
-            if ! echo "$output" | jq empty; then
-              echo "Error: release-please output was not valid JSON:"
-              echo "$output"
-              exit 1
-            fi
-
-            echo "Release needed. release-please output:"
-            echo "$output"
-
-            # Extract the proposed version for the root component (".") from the JSON output
-            version=$(echo "$output" | jq -r '."." // empty')
-
-            if [[ -z "$version" ]]; then
-              echo "Error: Could not extract version from release-please JSON output."
-              echo "Output was: $output"
-              exit 1
-            fi
-
-            tag_name="v$version" # Construct tag name
-            echo "Proposed version: $version"
-            echo "Proposed tag: $tag_name"
-            echo "release_needed=true" >> $GITHUB_OUTPUT
-            echo "version=$version" >> $GITHUB_OUTPUT
-            echo "tag_name=$tag_name" >> $GITHUB_OUTPUT
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Pass token for API calls
       # --- Custom Steps Start ---
 
       - name: Update main.go version and run swag init
-        if: steps.check_release.outputs.release_needed == 'true'
+        # Run only if release-please detected a new version to release
+        if: steps.release.outputs.releases_created == 'true'
         run: |
-          echo "Updating version in main.go to ${{ steps.check_release.outputs.version }}"
-          # Use sed to replace the version line.
-          sed -i "s|// @version .*|// @version         ${{ steps.check_release.outputs.version }}|g" main.go
+          echo "Updating version in main.go to ${{ steps.release.outputs.version }}"
+          # Use sed to replace the version line. Adjust line number if needed.
+          # Assumes version format like 1.2.3 (no 'v' prefix from steps.release.outputs.version)
+          sed -i "s|// @version .*|// @version         ${{ steps.release.outputs.version }}|g" main.go
 
           echo "Installing swag..."
-          go install github.com/swaggo/swag/cmd/swag@v1.16.1
+          go install github.com/swaggo/swag/cmd/swag@latest
           export PATH=$(go env GOPATH)/bin:$PATH
 
           echo "Running swag init..."
           swag init
-      # Run manifest again with --signoff to generate changelog, commit, and push ALL changes
-      - name: Generate Changelog, Commit, and Push
-        if: steps.check_release.outputs.release_needed == 'true'
+
+      - name: Commit version update and docs regeneration
+        if: steps.release.outputs.releases_created == 'true'
         run: |
-          # Configure git user for the commit release-please will make
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-
-          # Add the modified main.go and docs files so release-please includes them
+          echo "Staging changes..."
+          # Add main.go and the potentially changed docs files
           git add main.go docs/docs.go docs/swagger.json docs/swagger.yaml
-
-          # Run manifest with signoff - this creates the commit and pushes it
-          release-please manifest --signoff --token=${{ secrets.GITHUB_TOKEN }} --config-file .github/workflows/release-please-config.json
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Check if there are staged changes before committing
+          if ! git diff --staged --quiet; then
+            echo "Committing changes..."
+            git commit -m "chore(release): bump version to ${{ steps.release.outputs.tag_name }} and regenerate docs" -m "Released via release-please."
+            # Push changes back? release-please github-release might handle this implicitly
+            # git push origin ${{ github.ref_name }} # Push commit to the branch (e.g., main)
+          else
+            echo "No changes to commit."
+          fi
 
       # --- Custom Steps End ---
 
-      # Create the GitHub Release using the commit pushed by the previous step
-      - name: Create GitHub Release
-        id: github_release
-        if: steps.check_release.outputs.release_needed == 'true'
-        run: |
-          release-please github-release --token=${{ secrets.GITHUB_TOKEN }} --config-file .github/workflows/release-please-config.json
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Create the actual GitHub release using the tag version from the manifest step
+      # and the commit created in the previous step.
+      - name: Create GitHub Release using release-please
+        id: github_release # New ID for this step
+        if: steps.release.outputs.releases_created == 'true' # Only run if manifest found a release
+        uses: googleapis/release-please-action@v4
+        with:
+          command: github-release # Create the GitHub release
+          # release-please should automatically pick up the version/tag from the manifest run context
       # Upload assets to the release created by release-please
       # This step assumes release-please created a release and outputted upload_url
       - name: Upload Release Assets
-        # Use the tag_name determined earlier if release was needed
-        if: steps.check_release.outputs.release_needed == 'true'
+        if: steps.github_release.outputs.release_created == 'true' # Use output from github-release step
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Ensure gh cli is installed
-          sudo apt-get update && sudo apt-get install -y gh
-
-          echo "Uploading assets for tag ${{ steps.check_release.outputs.tag_name }}"
+          # Use gh cli or another tool to upload assets from the 'artifacts' directory
+          # Example using gh cli (ensure it's available or install it)
+          # sudo apt-get update && sudo apt-get install -y gh
           # Find all artifact directories (e.g., artifacts/docserver-linux-amd64)
           # and upload the binary within each
           for dir in artifacts/*; do
@@ -233,7 +206,7 @@ jobs:
               asset_path=$(find "$dir" -maxdepth 1 -type f -name 'docserver-*' | head -n 1)
               if [ -n "$asset_path" ]; then
                 echo "Uploading $asset_path"
-                gh release upload ${{ steps.check_release.outputs.tag_name }} "$asset_path" --clobber
+                gh release upload ${{ steps.github_release.outputs.tag_name }} "$asset_path" --clobber # Use output from github-release step
               else
                 echo "No binary found in $dir"
               fi
