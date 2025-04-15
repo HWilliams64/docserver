@@ -7,6 +7,7 @@ on:
       - '**' # Run tests on all branches
     paths:
       - .github/workflows/**
+      - release-please-config.json
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
@@ -15,6 +16,7 @@ on:
       - main # Run tests on PRs targeting main
     paths:
       - .github/workflows/**
+      - release-please-config.json
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
@@ -134,7 +136,7 @@ jobs:
           # Run release-please manifest. It will exit with 0 if no release needed, non-zero otherwise.
           # Capture output to check for version info if a release IS needed.
           # Use GITHUB_TOKEN for authentication
-          if output=$(release-please manifest --token=${{ secrets.GITHUB_TOKEN }} --no-signoff --print-manifest-path 2>&1); then
+          if output=$(release-please manifest --token=${{ secrets.GITHUB_TOKEN }} --config-file .github/workflows/release-please-config.json --no-signoff --print-manifest-path 2>&1); then
             echo "No release needed."
             echo "release_needed=false" >> $GITHUB_OUTPUT
           else
@@ -192,7 +194,7 @@ jobs:
           git add main.go docs/docs.go docs/swagger.json docs/swagger.yaml
 
           # Run manifest with signoff - this creates the commit and pushes it
-          release-please manifest --signoff --token=${{ secrets.GITHUB_TOKEN }}
+          release-please manifest --signoff --token=${{ secrets.GITHUB_TOKEN }} --config-file .github/workflows/release-please-config.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -203,7 +205,7 @@ jobs:
         id: github_release
         if: steps.check_release.outputs.release_needed == 'true'
         run: |
-          release-please github-release --token=${{ secrets.GITHUB_TOKEN }}
+          release-please github-release --token=${{ secrets.GITHUB_TOKEN }} --config-file .github/workflows/release-please-config.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Upload assets to the release created by release-please
