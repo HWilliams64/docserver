@@ -6,6 +6,7 @@ on:
     branches:
       - '**' # Run tests on all branches
     paths:
+      - .github/workflows/**
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
@@ -13,6 +14,7 @@ on:
     branches:
       - main # Run tests on PRs targeting main
     paths:
+      - .github/workflows/**
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
