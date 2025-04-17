@@ -38,23 +38,23 @@ import (
 // @description
 // @description     *   **`path`**: A dot-separated path to navigate the JSON structure (e.g., `user.name`, `details.metadata.version`). Use numeric indices for arrays (e.g., `items.0.id`, `tags.1`).
 // @description     *   **`operator`**: The comparison operator. Supported operators include:
-// @description         *   `eq`: Equal to (strings, numbers, booleans, null)
-// @description         *   `ne`: Not equal to
-// @description         *   `gt`: Greater than (numbers)
-// @description         *   `gte`: Greater than or equal to (numbers)
-// @description         *   `lt`: Less than (numbers)
-// @description         *   `lte`: Less than or equal to (numbers)
-// @description         *   `contains`: String contains substring (case-sensitive)
-// @description         *   `startswith`: String starts with prefix (case-sensitive)
-// @description         *   `endswith`: String ends with suffix (case-sensitive)
+// @description         *   `equals`: Equal to (strings, numbers, booleans, null)
+// @description         *   `notequals`: Not equal to
+// @description         *   `greaterthan`: Greater than (numbers)
+// @description         *   `greaterthanorequals`: Greater than or equal to (numbers)
+// @description         *   `lessthan`: Less than (numbers)
+// @description         *   `lessthanorequals`: Less than or equal to (numbers)
+// @description         *   `contains`: String contains substring, or array contains element (case-sensitive by default).
+// @description         *   `startswith`: String starts with prefix (case-sensitive by default).
+// @description         *   `endswith`: String ends with suffix (case-sensitive by default).
 // @description     *   **`value`**: The value to compare against.
-// @description         *   Strings MUST be enclosed in double quotes (e.g., `\"John Doe\"`). Remember to URL-encode the query parameter string.
+// @description         *   Strings MUST be enclosed in double quotes (e.g., `\"John Doe\"`). Remember to URL-encode the query parameter string. Add `-insensitive` suffix to string operators (e.g., `equals-insensitive`, `contains-insensitive`) for case-insensitive matching.
 // @description         *   Numbers (e.g., `123`, `45.6`), booleans (`true`/`false`), and `null` should be used directly.
 // @description
 // @description     **Logical Operators (Combining Queries):**
-// @description     You combine multiple conditions by providing multiple `content_query` parameters.
-// @description     *   **`AND` (Implicit):** By default, consecutive `path operator value` queries are joined by `AND`. The document must match *all* conditions.
-// @description     *   **`OR` (Explicit):** To use `OR`, add `content_query=OR` *before* the condition you want to link with OR. The `OR` applies between the condition *before* it and the condition *after* it.
+// @description     You combine multiple conditions by providing `content_query` parameters for conditions interleaved with explicit logical operators (`and` or `or`).
+// @description     *   **`and` (Explicit):** To link two conditions with AND, place `content_query=and` between them. The document must match *both* conditions.
+// @description     *   **`or` (Explicit):** To link two conditions with OR, place `content_query=or` between them. The document must match *either* condition.
 // @description
 // @description     **Examples:**
 // @description
@@ -71,29 +71,29 @@ import (
 // @description     ```
 // @description
 // @description     1.  **Simple Equality:** Find documents where `status` is `active`.
-// @description         `?content_query=status eq \"active\"`
+// @description         `?content_query=status equals \"active\"`
 // @description
 // @description     2.  **Numeric Comparison:** Find documents where `priority` is greater than or equal to `5`.
-// @description         `?content_query=priority gte 5`
+// @description         `?content_query=priority greaterthanorequals 5`
 // @description
 // @description     3.  **Nested Field:** Find documents assigned to `Alice`.
-// @description         `?content_query=assignee.name eq \"Alice\"`
+// @description         `?content_query=assignee.name equals \"Alice\"`
 // @description
 // @description     4.  **Array Element:** Find documents where the first tag is `urgent`.
-// @description         `?content_query=tags.0 eq \"urgent\"`
+// @description         `?content_query=tags.0 equals \"urgent\"`
 // @description
-// @description     5.  **Implicit `AND`:** Find documents for project `Alpha` **AND** status `active`.
-// @description         `?content_query=project eq \"Alpha\"&content_query=status eq \"active\"`
+// @description     5.  **Explicit `AND`:** Find documents for project `Alpha` **AND** status `active`.
+// @description         `?content_query=project equals \"Alpha\"&content_query=and&content_query=status equals \"active\"`
 // @description
 // @description     6.  **Explicit `OR`:** Find documents where status is `active` **OR** priority is less than `3`.
-// @description         `?content_query=status eq \"active\"&content_query=OR&content_query=priority lt 3`
+// @description         `?content_query=status equals \"active\"&content_query=or&content_query=priority lessthan 3`
 // @description
-// @description     7.  **Combined `AND` and `OR`:** Find documents where (project is `Alpha` **AND** status is `active`) **OR** (priority is `10`).
-// @description         `?content_query=project eq \"Alpha\"&content_query=status eq \"active\"&content_query=OR&content_query=priority eq 10`
-// @description         *(Explanation: `project eq "Alpha"` AND `status eq "active"` are grouped implicitly. The `OR` then links this group to `priority eq 10`.)*
+// @description     7.  **Combined `AND` and `OR`:** Find documents where (project is `Alpha` **AND** status is `active`) **OR** (priority is `10`). Evaluation is strictly left-to-right.
+// @description         `?content_query=project equals \"Alpha\"&content_query=and&content_query=status equals \"active\"&content_query=or&content_query=priority equals 10`
+// @description         *(Explanation: `project equals "Alpha"` AND `status equals "active"` is evaluated first, then the result is OR'd with `priority equals 10`.)*
 // @description
 // @description     8.  **Nested Field with `AND`:** Find documents where `assignee.name` is `Alice` **AND** `metadata.reviewed` is `true`.
-// @description         `?content_query=assignee.name eq \"Alice\"&content_query=metadata.reviewed eq true`
+// @description         `?content_query=assignee.name equals \"Alice\"&content_query=and&content_query=metadata.reviewed equals true`
 
 // @license.name  MIT
 // @license.url   https://github.com/HWilliams64/docserver/blob/main/License.md

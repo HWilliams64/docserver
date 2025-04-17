@@ -23,11 +23,19 @@ DocServer is a simple API server designed for **educational purposes only**. It 
 
 ## Getting Started
 
-### Downloading Pre-compiled Binaries
+Here's a quick overview:
+
+1.  [Download the appropriate binary](#downloading-pre-compiled-binaries) for your system.
+2.  [Run the downloaded binary](#running-the-binary) from your terminal.
+
+See below for detailed instructions.
+
+
+### 1) Downloading Pre-compiled Binaries
 
 Pre-compiled binaries for different operating systems may be available on the [GitHub Releases page](https://github.com/HWilliams64/docserver/releases).
 
-### Choosing the Right Binary
+#### Choosing the Right Binary
 
 The binaries are provided for different combinations of Operating System (OS) and CPU Architecture. Here's a guide to help you choose:
 
@@ -53,7 +61,7 @@ For example:
 *   `docserver-darwin-arm64`: For Macs with Apple Silicon (M1/M2/M3).
 *   `docserver-linux-amd64`: For standard 64-bit Linux.
 
-#### Running the Binary
+### 2) Running the Binary
 
 After downloading the appropriate binary:
 
@@ -73,6 +81,16 @@ After downloading the appropriate binary:
         *(e.g., `./docserver-darwin-arm64 -port 9000` or `./docserver-linux-amd64 --db-file /data/mydocs.json`)*
 
 Refer to the [Configuration](#configuration) section below for available arguments like `-port` or `-db-file`.
+
+## Classroom Resources
+
+If you are using DocServer in a classroom setting or for structured learning, additional resources are available in the `docs/class` directory:
+
+*   **`docs/class/what-is-rest.md`**: An introduction to the concepts of REST APIs.
+*   **`docs/class/slides.md`**: Presentation slides covering the DocServer API and its usage.
+*   **`docs/class/workbook.md`**: An interactive workbook with step-by-step exercises to practice using the DocServer API via `curl`.
+
+These resources provide context and hands-on practice to complement the core API functionality.
 
 ## Configuration
 
