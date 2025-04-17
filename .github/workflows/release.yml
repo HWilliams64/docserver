@@ -35,7 +35,13 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Run tests
-        run: go test ./...
+        run: go test ./... -coverprofile=./cover.out -covermode=atomic -coverpkg=./...
+
+      - name: Check test coverage
+        uses: vladopajic/go-test-coverage@v2
+        with:
+          config: ./.github/.testcoverage.yml
+
 
   build:
     name: Build Binaries
