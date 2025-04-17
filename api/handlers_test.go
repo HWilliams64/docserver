@@ -95,10 +95,14 @@ func setupTestServer(t *testing.T) (*gin.Engine, *db.Database, *config.Config, f
 	router.POST("/auth/logout", authMiddleware, func(c *gin.Context) { LogoutHandler(c, database, cfg) })
 
 
-	// Cleanup function to remove the temporary directory
+	// Cleanup function to close the database and remove the temporary directory
 	cleanup := func() {
-		err := os.RemoveAll(tempDir)
-		if err != nil {
+		// Close the database first to ensure pending saves complete
+		if err := database.Close(); err != nil {
+			t.Logf("Warning: Error closing test database: %v", err)
+		}
+		// Now remove the temporary directory
+		if err := os.RemoveAll(tempDir); err != nil {
 			t.Logf("Warning: Failed to remove temp directory %s: %v", tempDir, err)
 		}
 	}
@@ -303,6 +307,20 @@ func TestAuthEndpoints(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, errorResponse["error"], "Invalid email or password") // Match actual casing
 	})
+	t.Run("Login Invalid JSON", func(t *testing.T) {
+		// Send malformed JSON
+		invalidJSON := `{"email": "test@example.com", "password": "password123"` // Missing closing brace
+		rr := performRequest(router, "POST", "/auth/login", bytes.NewBufferString(invalidJSON), "")
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code) // Expect 400 Bad Request
+
+		// Check error response
+		var errorResponse map[string]string
+		err := json.Unmarshal(rr.Body.Bytes(), &errorResponse)
+		require.NoError(t, err)
+		assert.Contains(t, errorResponse["error"], "Invalid request body", "Error message should indicate invalid request body")
+	})
+
 	
 	// --- Logout ---
 	t.Run("Logout Success", func(t *testing.T) {
@@ -465,6 +483,46 @@ func TestProfileEndpoints(t *testing.T) {
 
 		assert.NotEqual(t, firstUserID, secondUserID, "User IDs on page 1 and 2 should be different")
 	})
+	t.Run("Search Profiles Invalid Page Param", func(t *testing.T) {
+		rr := performRequest(router, "GET", "/profiles?page=abc", nil, token2) // Use token2 as token1's user is deleted
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Invalid 'page' or 'limit'")
+	})
+
+	t.Run("Search Profiles Invalid Limit Param", func(t *testing.T) {
+		rr := performRequest(router, "GET", "/profiles?limit=xyz", nil, token2)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Invalid 'page' or 'limit'")
+	})
+
+	t.Run("Search Profiles Page Zero", func(t *testing.T) {
+		rr := performRequest(router, "GET", "/profiles?page=0", nil, token2)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Invalid 'page' or 'limit'")
+	})
+
+	t.Run("Search Profiles Limit Over Max", func(t *testing.T) {
+		rr := performRequest(router, "GET", "/profiles?limit=101", nil, token2)
+		assert.Equal(t, http.StatusOK, rr.Code) // Should succeed, but limit capped
+		var searchResp SearchProfilesResponse // Use the defined struct
+		err := json.Unmarshal(rr.Body.Bytes(), &searchResp)
+		require.NoError(t, err)
+		assert.Equal(t, 100, searchResp.Limit, "Limit should be capped at 100")
+		assert.GreaterOrEqual(t, searchResp.Total, 1, "Should find at least the remaining user") // Only user2 remains
+	})
+
+	t.Run("Search Profiles Page Out Of Bounds", func(t *testing.T) {
+		// Assuming only 1 user (user2) remains after user1 deletion
+		rr := performRequest(router, "GET", "/profiles?page=2&limit=10", nil, token2)
+		assert.Equal(t, http.StatusOK, rr.Code) // Should return OK but empty data
+		var searchResp SearchProfilesResponse
+		err := json.Unmarshal(rr.Body.Bytes(), &searchResp)
+		require.NoError(t, err)
+		assert.Empty(t, searchResp.Data, "Data should be empty for out-of-bounds page")
+		assert.Equal(t, 2, searchResp.Total, "Total should reflect the actual number of users (both exist at this point)") // Both users exist before deletion test
+		assert.Equal(t, 2, searchResp.Page)
+		assert.Equal(t, 10, searchResp.Limit)
+	})
 
 
 	// --- Delete Me ---
@@ -493,6 +551,16 @@ func TestProfileEndpoints(t *testing.T) {
 		// Verify user is still not found in DB (using the original userID)
 		_, found := database.GetProfileByID(userID)
 		assert.False(t, found, "User should remain deleted from database")
+	})
+	t.Run("Update Me After Deletion", func(t *testing.T) {
+		// User 'profile.user@example.com' was deleted in "Delete Me Success"
+		// Attempt to update using the old token
+		updatePayload := gin.H{
+			"first_name": "Deleted",
+			"last_name":  "UserUpdate",
+		}
+		rr := performRequest(router, "PUT", "/profiles/me", marshalJSONBody(t, updatePayload), token) // Use the original token
+		assert.Equal(t, http.StatusNotFound, rr.Code, "Updating a deleted user's profile should return 404 Not Found")
 	})
 
 } // Closing brace for TestProfileEndpoints
@@ -572,6 +640,44 @@ func TestDocumentEndpoints(t *testing.T) {
 		require.NoError(t, err2)
 		assert.Equal(t, 0, listResp2.Total)
 		assert.Empty(t, listResp2.Data)
+	})
+
+	t.Run("Get Documents Invalid Page Param", func(t *testing.T) {
+		rr := performRequest(router, "GET", "/documents?page=abc", nil, token1)
+		// Explicitly check the response code and body
+		assert.Equal(t, http.StatusBadRequest, rr.Code, "Expected 400 Bad Request for invalid page param")
+		assert.Contains(t, rr.Body.String(), "Invalid 'page' or 'limit'", "Error message mismatch for invalid page param")
+	})
+
+	t.Run("Get Documents Invalid Limit Param", func(t *testing.T) {
+		rr := performRequest(router, "GET", "/documents?limit=xyz", nil, token1)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Invalid 'page' or 'limit'")
+	})
+
+	t.Run("Get Documents Page Zero", func(t *testing.T) {
+		rr := performRequest(router, "GET", "/documents?page=0", nil, token1)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Invalid 'page' or 'limit'")
+	})
+
+	t.Run("Get Documents Invalid Scope Param", func(t *testing.T) {
+		// Assuming QueryDocuments returns an error containing "invalid scope value"
+		rr := performRequest(router, "GET", "/documents?scope=invalidscope", nil, token1)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid scope value")
+	})
+
+	t.Run("Get Documents Invalid SortBy Param", func(t *testing.T) {
+		rr := performRequest(router, "GET", "/documents?sort_by=invalidfield", nil, token1)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid sort_by value")
+	})
+
+	t.Run("Get Documents Invalid Order Param", func(t *testing.T) {
+		rr := performRequest(router, "GET", "/documents?order=sideways", nil, token1)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid order value")
 	})
 
 	// --- GET /documents/{id} ---
@@ -657,7 +763,6 @@ func TestDocumentEndpoints(t *testing.T) {
 		rr := performRequest(router, "PUT", "/documents/"+createdDocID, marshalJSONBody(t, updatePayload), token1)
 		assert.Equal(t, http.StatusBadRequest, rr.Code, "Updating document without 'content' field should return 400 Bad Request")
 	})
-
 	t.Run("Update Document Missing ID", func(t *testing.T) {
 		updatePayload := gin.H{"content": "update with missing id"}
 		// Request path is missing the document ID
@@ -677,8 +782,8 @@ func TestDocumentEndpoints(t *testing.T) {
 		require.NotEmpty(t, createdDocID, "Cannot run test without created document ID")
 		// User 2 tries to delete User 1's document
 		rr := performRequest(router, "DELETE", "/documents/"+createdDocID, nil, token2)
-		// Expect 403 Forbidden or 404 Not Found
-		assert.Contains(t, []int{http.StatusForbidden, http.StatusNotFound}, rr.Code)
+		// Expect 403 Forbidden because the user exists but doesn't own the document
+		assert.Equal(t, http.StatusForbidden, rr.Code)
 
 		// Ensure doc still exists
 		_, found := database.GetDocumentByID(createdDocID)
@@ -706,9 +811,29 @@ func TestDocumentEndpoints(t *testing.T) {
 		assert.Equal(t, http.StatusNoContent, rr.Code, "Deleting a non-existent doc should be idempotent (204)")
 
 		rr2 := performRequest(router, "DELETE", "/documents/completely-non-existent", nil, token1)
-		assert.Equal(t, http.StatusNoContent, rr2.Code, "Deleting a non-existent doc again should be idempotent (204)")
-	})
+	assert.Equal(t, http.StatusNoContent, rr2.Code, "Deleting a non-existent doc again should be idempotent (204)")
+})
 
+t.Run("Delete Document No Auth", func(t *testing.T) {
+	// Use the ID created earlier, even though it might be deleted now.
+	// The point is to test the auth middleware.
+	targetDocID := createdDocID
+	if targetDocID == "" {
+		targetDocID = "any-doc-id" // Fallback if creation failed
+	}
+	rr := performRequest(router, "DELETE", "/documents/"+targetDocID, nil, "") // No token
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+})
+
+	t.Run("Get Sharers Document Not Found", func(t *testing.T) {
+		// Attempt to get shares for a document ID that doesn't exist
+		// ownerToken is defined in TestSharingEndpoints scope
+		// Use a token available in this scope (e.g., token1 from TestDocumentHandlers setup)
+		rr := performRequest(router, "GET", "/documents/non-existent-doc-id/shares", nil, token1)
+		// This should trigger the !found check inside checkDocumentOwner
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Document with ID 'non-existent-doc-id' not found")
+	})
 	t.Run("Delete Document Missing ID", func(t *testing.T) {
 		// Request path is missing the document ID
 		rr := performRequest(router, "DELETE", "/documents/", nil, token1)

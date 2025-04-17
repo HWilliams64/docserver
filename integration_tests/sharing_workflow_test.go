@@ -54,12 +54,12 @@ func TestMain(m *testing.M) {
 	// --- 2. Prepare environment and arguments for the server ---
 	// Use environment variables for configuration
 	env := append(os.Environ(),
-		fmt.Sprintf("DB_FILE=%s", absDbPath),
-		fmt.Sprintf("JWT_SECRET=%s", testJwtSecret),
-		fmt.Sprintf("PORT=%s", testPort),
-		"ADDRESS=0.0.0.0", // Ensure it listens externally if needed, localhost is fine too
-		"SAVE_INTERVAL=100ms", // Save quickly during tests
-		"ENABLE_BACKUP=false", // No need for backups during tests
+		fmt.Sprintf("DOCSERVER_DB_FILE_PATH=%s", absDbPath),
+		fmt.Sprintf("DOCSERVER_JWT_SECRET=%s", testJwtSecret),
+		fmt.Sprintf("DOCSERVER_LISTEN_PORT=%s", testPort),
+		"DOCSERVER_LISTEN_ADDRESS=0.0.0.0", // Ensure it listens externally if needed, localhost is fine too
+		"DOCSERVER_SAVE_INTERVAL=100ms", // Save quickly during tests
+		"DOCSERVER_ENABLE_BACKUP=false", // No need for backups during tests
 	)
 
 	// --- 3. Run the server binary as a background process ---

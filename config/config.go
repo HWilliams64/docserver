@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 	"log"
-	"crypto/rand"
-	"encoding/hex"
+	// "crypto/rand" // No longer needed after removing JWT generation
+	// "encoding/hex"  // No longer needed after removing JWT generation
 	"fmt"
 	"strings"
 )
@@ -49,12 +49,14 @@ func LoadConfig() (*Config, error) {
 	cfg := &Config{}
 
 	// Define flags
-	flag.StringVar(&cfg.ListenAddress, "address", getEnv("ADDRESS", defaultAddress), "Server listen address (Env: ADDRESS)")
-	flag.StringVar(&cfg.ListenPort, "port", getEnv("PORT", defaultPort), "Server listen port (Env: PORT)")
-	flag.StringVar(&cfg.DbFilePath, "db-file", getEnv("DB_FILE", defaultDbFile), "Path to the JSON database file (Env: DB_FILE)")
-	saveIntervalStr := flag.String("save-interval", getEnv("SAVE_INTERVAL", defaultSaveInterval.String()), "Debounce interval for saving DB (e.g., 5s, 100ms) (Env: SAVE_INTERVAL)")
-	flag.BoolVar(&cfg.EnableBackup, "enable-backup", getEnvBool("ENABLE_BACKUP", defaultEnableBackup), "Enable database backup (.bak file) before saving (Env: ENABLE_BACKUP)")
-	flag.StringVar(&cfg.JwtSecretFile, "jwt-secret-file", getEnv("JWT_SECRET_FILE", defaultJwtSecretFile), "Path to file containing JWT secret key (overrides JWT_SECRET env var) (Env: JWT_SECRET_FILE)")
+	// Use DOCSERVER_ prefix for environment variables to align with testing and avoid conflicts
+	flag.StringVar(&cfg.ListenAddress, "address", getEnv("DOCSERVER_LISTEN_ADDRESS", defaultAddress), "Server listen address (Env: DOCSERVER_LISTEN_ADDRESS)")
+	// Define flag with the ultimate default. We'll check env var after parsing.
+	flag.StringVar(&cfg.ListenPort, "port", defaultPort, "Server listen port (Env: DOCSERVER_LISTEN_PORT)")
+	flag.StringVar(&cfg.DbFilePath, "db-file", getEnv("DOCSERVER_DB_FILE_PATH", defaultDbFile), "Path to the JSON database file (Env: DOCSERVER_DB_FILE_PATH)")
+	saveIntervalStr := flag.String("save-interval", getEnv("DOCSERVER_SAVE_INTERVAL", defaultSaveInterval.String()), "Debounce interval for saving DB (e.g., 5s, 100ms) (Env: DOCSERVER_SAVE_INTERVAL)")
+	flag.BoolVar(&cfg.EnableBackup, "enable-backup", getEnvBool("DOCSERVER_ENABLE_BACKUP", defaultEnableBackup), "Enable database backup (.bak file) before saving (Env: DOCSERVER_ENABLE_BACKUP)")
+	flag.StringVar(&cfg.JwtSecretFile, "jwt-secret-file", getEnv("DOCSERVER_JWT_SECRET_FILE", defaultJwtSecretFile), "Path to file containing JWT secret key (overrides DOCSERVER_JWT_SECRET env var) (Env: DOCSERVER_JWT_SECRET_FILE)")
 
 	// Non-configurable defaults (as per plan)
 	cfg.TokenLifetime = defaultTokenLifetime
@@ -62,6 +64,46 @@ func LoadConfig() (*Config, error) {
 
 	// Parse flags to override defaults and env vars
 	flag.Parse()
+
+	// --- Post-Flag Parsing Adjustments ---
+	// Explicitly check environment variables to allow them to override defaults
+	// if the corresponding flag was not provided.
+
+	// Port
+	envPort := getEnv("DOCSERVER_LISTEN_PORT", "")
+	// If the flag wasn't set (still default) AND the env var exists, use the env var.
+	if cfg.ListenPort == defaultPort && envPort != "" {
+		cfg.ListenPort = envPort
+	}
+
+	// DbFilePath (similar logic)
+	envDbFile := getEnv("DOCSERVER_DB_FILE_PATH", "")
+	if cfg.DbFilePath == defaultDbFile && envDbFile != "" {
+		cfg.DbFilePath = envDbFile
+	}
+
+	// SaveInterval (needs parsing)
+	envSaveInterval := getEnv("DOCSERVER_SAVE_INTERVAL", "")
+	// If the flag wasn't set (still default) AND the env var exists, try parsing env var.
+	if *saveIntervalStr == defaultSaveInterval.String() && envSaveInterval != "" {
+		// Try parsing the environment variable duration
+		_, err := time.ParseDuration(envSaveInterval) // Use blank identifier
+		if err == nil {
+			*saveIntervalStr = envSaveInterval // Update the string for later parsing logic if valid
+		} else {
+			log.Printf("WARN: Invalid duration in DOCSERVER_SAVE_INTERVAL: '%s'. Using default/flag value. Error: %v", envSaveInterval, err)
+		}
+	}
+// EnableBackup (boolean) - No post-parsing check needed.
+// The initial flag definition `flag.BoolVar(&cfg.EnableBackup, "enable-backup", getEnvBool("DOCSERVER_ENABLE_BACKUP", defaultEnableBackup), ...)`
+// correctly handles the environment variable override when the flag isn't explicitly set.
+
+	// JwtSecretFile (similar logic to DbFilePath)
+	envJwtSecretFile := getEnv("DOCSERVER_JWT_SECRET_FILE", "")
+	if cfg.JwtSecretFile == defaultJwtSecretFile && envJwtSecretFile != "" {
+		cfg.JwtSecretFile = envJwtSecretFile
+	}
+
 
 	// Parse duration after flags are parsed
 	var err error
@@ -87,44 +129,43 @@ func LoadConfig() (*Config, error) {
 
 	// If file wasn't specified or failed to load, check environment variable
 	if cfg.JwtSecret == "" {
-		cfg.JwtSecret = getEnv("JWT_SECRET", defaultJwtSecretEnv)
+		// Use DOCSERVER_ prefix for environment variable
+		cfg.JwtSecret = getEnv("DOCSERVER_JWT_SECRET", defaultJwtSecretEnv)
 		if cfg.JwtSecret != "" {
-			log.Printf("INFO: Loaded JWT secret from JWT_SECRET environment variable.")
+			log.Printf("INFO: Loaded JWT secret from DOCSERVER_JWT_SECRET environment variable.")
 		}
 	}
 
-	// If still no secret, generate one and save it
+	// If still no secret after checking file and env var, it's a fatal error.
 	if cfg.JwtSecret == "" {
-		log.Printf("INFO: No JWT secret provided via file or environment variable. Generating a new secret.")
-		newSecretBytes := make([]byte, 32) // 256 bits
-		if _, err := rand.Read(newSecretBytes); err != nil {
-			return nil, fmt.Errorf("failed to generate random JWT secret: %w", err)
-		}
-		cfg.JwtSecret = hex.EncodeToString(newSecretBytes)
-
-		// Attempt to save the generated key to the default file
-		keyFilePath := defaultJwtKeyFile
-		log.Printf("INFO: Saving generated JWT secret to: %s", keyFilePath)
-		// Ensure directory exists (though it's likely '.')
-		if err := os.MkdirAll(filepath.Dir(keyFilePath), 0750); err != nil {
-			log.Printf("WARN: Could not create directory for JWT key file '%s': %v. Secret will only be in memory.", keyFilePath, err)
-		} else {
-			// Write the file (permissions 0600: owner read/write only)
-			if err := os.WriteFile(keyFilePath, []byte(cfg.JwtSecret), 0600); err != nil {
-				log.Printf("WARN: Failed to save generated JWT secret to '%s': %v. Secret will only be in memory.", keyFilePath, err)
-			} else {
-				log.Printf("INFO: Successfully saved generated JWT secret to %s. Add this file to .gitignore!", keyFilePath)
-			}
-		}
+		// Removed automatic generation. A secret MUST be provided.
+		return nil, fmt.Errorf("JWT secret not provided via file (DOCSERVER_JWT_SECRET_FILE) or environment variable (DOCSERVER_JWT_SECRET)")
+	}
+	// Basic validation: ensure secret is not just whitespace
+	if strings.TrimSpace(cfg.JwtSecret) == "" {
+		return nil, fmt.Errorf("JWT secret cannot be empty or only whitespace")
 	}
 
+	// --- Database Path Validation ---
 	// Ensure DbFilePath is absolute or relative to the current working directory
 	absDbPath, err := filepath.Abs(cfg.DbFilePath)
 	if err != nil {
-		log.Printf("WARN: Could not determine absolute path for db-file '%s': %v. Using provided path.", cfg.DbFilePath, err)
+		// If we can't even get an absolute path, treat it as an error
+		return nil, fmt.Errorf("could not determine absolute path for db-file '%s': %w", cfg.DbFilePath, err)
+		// log.Printf("WARN: Could not determine absolute path for db-file '%s': %v. Using provided path.", cfg.DbFilePath, err)
 	} else {
 		cfg.DbFilePath = absDbPath
 	}
+
+	// Check if the resolved DB path points to an existing directory
+	fileInfo, err := os.Stat(cfg.DbFilePath)
+	if err == nil && fileInfo.IsDir() { // Path exists and it's a directory
+		return nil, fmt.Errorf("database path '%s' points to a directory, not a file", cfg.DbFilePath)
+	}
+	// We don't return os.IsNotExist(err) as an error here, because the DB might be created on first run.
+	// Further validation (permissions, etc.) will happen in db.NewDatabase.
+
+	// (Moved path resolution and validation earlier, before logging)
 
 
 	logConfiguration(cfg) // Log the final configuration
@@ -178,16 +219,15 @@ func determineJwtSecretSource(cfg *Config) string {
 			return fmt.Sprintf("File (%s)", cfg.JwtSecretFile)
 		}
 	}
-	if envSecret := getEnv("JWT_SECRET", ""); envSecret != "" && envSecret == cfg.JwtSecret {
-		return "Environment Variable (JWT_SECRET)"
+	// Use DOCSERVER_ prefix
+	if envSecret := getEnv("DOCSERVER_JWT_SECRET", ""); envSecret != "" && envSecret == cfg.JwtSecret {
+		return "Environment Variable (DOCSERVER_JWT_SECRET)"
 	}
-	// Check if it matches the content of the default generated key file
-	defaultKeyBytes, err := os.ReadFile(defaultJwtKeyFile)
-	if err == nil && string(defaultKeyBytes) == cfg.JwtSecret {
-		return fmt.Sprintf("Generated File (%s)", defaultJwtKeyFile)
-	}
-	// If none of the above, it must have been generated in memory only
-	return "Generated (In Memory)"
+	// Removed check for generated key file as generation is removed
+	// If it wasn't from the specified file or the env var, the source is unclear or potentially problematic
+	// but LoadConfig should have already returned an error if it was empty.
+	// This function might need adjustment if more complex secret sources are added later.
+	return "Provided (File or Environment)"
 }
 
 // Helper function to handle errors during config loading - could be expanded

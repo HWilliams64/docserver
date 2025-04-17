@@ -556,10 +556,14 @@ func TestDatabase_DeleteProfile(t *testing.T) {
 	db.Database.Profiles[profile2.ID] = profile2
 	require.Len(t, db.Database.Profiles, 2, "Incorrect number of profiles before delete")
 
+	// Persist initial state to ensure file exists before delete triggers save
+	err := db.persist()
+	require.NoError(t, err, "Initial persist failed before delete")
+
 	// TODO: Add tests for cascading deletes (documents, shares) once those are implemented
 
 	// 1. Delete existing profile
-	err := db.DeleteProfile(profile1.ID)
+	err = db.DeleteProfile(profile1.ID) // Re-assign err
 	assert.NoError(t, err, "DeleteProfile failed for existing profile")
 	assert.Len(t, db.Database.Profiles, 1, "Should have 1 profile left after delete")
 	_, found := db.Database.Profiles[profile1.ID]
@@ -670,8 +674,10 @@ func TestDatabase_CreateDocument(t *testing.T) {
 	require.True(t, found, "Created document not found in internal map")
 	assert.Equal(t, createdDoc, storedDoc, "Stored document does not match returned document")
 
-	// Verify save requested
-	time.Sleep(db.config.SaveInterval * 2)
+	// Verify save requested by forcing a close, which should trigger pending persist
+	// time.Sleep(db.config.SaveInterval * 2) // Remove unreliable sleep
+	err = db.Close() // Force any pending save
+	require.NoError(t, err, "db.Close() failed, likely final persist error")
 	fileContent := readTestDBFile(t, db.config)
 	assert.Contains(t, fileContent, createdDoc.ID, "Saved file should contain new document ID")
 	assert.Contains(t, fileContent, `"title": "Test Doc"`, "Saved file should contain document content (check space after colon)")
@@ -770,10 +776,15 @@ func TestDatabase_UpdateDocument(t *testing.T) {
 	}
 	db.Database.Documents[doc.ID] = doc
 
+	// Persist initial state to ensure file exists before update triggers save
+	err := db.persist()
+	require.NoError(t, err, "Initial persist failed before update")
+
+
 	newContent := map[string]interface{}{"status": "updated"}
 
 	// 1. Update existing document
-	updatedDoc, err := db.UpdateDocument(doc.ID, newContent)
+	updatedDoc, err := db.UpdateDocument(doc.ID, newContent) // Use := here as err is declared above
 	require.NoError(t, err, "UpdateDocument failed")
 
 	// Verify returned doc

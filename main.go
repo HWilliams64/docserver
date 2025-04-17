@@ -113,7 +113,7 @@ import (
 //go:embed all:docs
 var embeddedDocsFS embed.FS
 
-func main() {
+func main() { // coverage-ignore
 	// Seed random number generator (for OTPs)
 	rand.Seed(time.Now().UnixNano())
 

@@ -58,15 +58,15 @@ func NewDatabase(cfg *config.Config) (*Database, error) {
 		// If Load returns an error, it means it couldn't parse an existing file.
 		// If the file just didn't exist, Load returns nil and initializes empty maps.
 		// We only return the error if it's critical (e.g., parse error).
-				if !os.IsNotExist(err) { // Check if the error is *not* 'file not found'
-					log.Printf("ERROR: Database Load failed with critical error: %v", err)
-					return nil, err // Propagate critical errors
-				}
-				// If the error was os.IsNotExist, Load already logged it and initialized empty maps, so we continue.
-			}
-		
-			return db, nil
+		if !os.IsNotExist(err) { // Check if the error is *not* 'file not found'
+			log.Printf("ERROR: Database Load failed with critical error: %v", err)
+			return nil, err // Propagate critical errors
 		}
+		// If the error was os.IsNotExist, Load already logged it and initialized empty maps, so we continue.
+	} // Close the 'if err != nil' block
+
+	return db, nil // Return db outside the error check
+} // Close the NewDatabase function
 		
 		// Load reads the database state from the JSON file specified in the configuration.
 		// If the file doesn't exist, it initializes an empty database state and logs a message.
@@ -738,6 +738,42 @@ func (db *Database) RemoveSharerFromDocument(docID, profileID string) error {
 	} else {
 		// Profile ID was not in the list, nothing to remove
 		return nil
+	}
+return nil
+}
+
+
+// Close ensures any pending save operation is completed before shutdown.
+func (db *Database) Close() error {
+	var needsFinalPersist bool
+
+	db.saveMutex.Lock()
+	log.Printf("DEBUG: Closing database instance. Checking for pending save...")
+
+	// Stop any active timer
+	if db.saveTimer != nil {
+		db.saveTimer.Stop()
+		db.saveTimer = nil // Clear the timer
+		log.Printf("DEBUG: Stopped active save timer.")
+	}
+
+	// Check if a save was pending *after* stopping the timer
+	if db.savePending {
+		needsFinalPersist = true
+		db.savePending = false // Reset flag under lock
+	}
+	db.saveMutex.Unlock() // Release lock before potentially calling persist
+
+	// Perform persist outside the lock if needed
+	if needsFinalPersist {
+		log.Printf("INFO: Performing final persist operation on close...")
+		if err := db.persist(); err != nil {
+			log.Printf("ERROR: Final persist operation failed during close: %v", err)
+			return err // Return the error from persist
+		}
+		log.Printf("INFO: Final persist operation completed.")
+	} else {
+		log.Printf("DEBUG: No pending save operation on close.")
 	}
 
 	return nil
