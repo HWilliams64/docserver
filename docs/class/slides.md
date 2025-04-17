@@ -1,13 +1,15 @@
 ---
+footer: High-Level Overview
+header: Docserver & REST APIs
 marp: true
-theme: default
 paginate: true
-header: 'Docserver & REST APIs'
-footer: 'High-Level Overview'
+theme: default
 ---
 
 <!-- _class: lead -->
+
 # Docserver & REST APIs
+
 A High-Level Introduction
 
 ---
@@ -16,12 +18,13 @@ A High-Level Introduction
 
 **RE**presentational **S**tate **T**ransfer
 
-*   An **architectural style** for designing networked applications.
-*   Uses standard **HTTP methods** (GET, POST, PUT, DELETE).
-*   Focuses on **Resources** (like users, documents) identified by **URIs** (like `/users/123`).
-*   **Stateless:** Server doesn't remember client state between requests.
+* An **architectural style** for designing networked applications.
+* Uses standard **HTTP methods** (GET, POST, PUT, DELETE).
+* Focuses on **Resources** (like users, documents) identified by **URIs** (like `/users/123`).
+* **Stateless:** Server doesn't remember client state between requests.
 
 <!-- For some reason the 1st mermaid diagrams does not load so this is placeholder to the rest of the diagrams load properly--->
+
 <pre class="mermaid" style="display: none;"></pre>
 
 ---
@@ -34,7 +37,6 @@ sequenceDiagram
     participant Server
     Client->>Server: HTTP Request (e.g., GET /users/123)
     Server-->>Client: HTTP Response (e.g., 200 OK + User Data)
-</pre>
 
 ---
 
@@ -57,21 +59,22 @@ graph TD
 
     ReqLine --> ReqHeaders --> ReqBody
     ResStatus --> ResHeaders --> ResBody
+
 </div>
 
 ---
 
-*   **Method:** The action (GET, POST, etc.).
-*   **URI:** The resource path (`/documents/doc_123`).
-*   **Headers:** Metadata (authentication, content format).
-*   **Body:** Data payload (often JSON).
-*   **Status Code:** Outcome (200 OK, 404 Not Found, etc.).
+* **Method:** The action (GET, POST, etc.).
+* __URI:__ The resource path (`/documents/doc_123`).
+* **Headers:** Metadata (authentication, content format).
+* **Body:** Data payload (often JSON).
+* **Status Code:** Outcome (200 OK, 404 Not Found, etc.).
 
 ---
 
 ## Example: Getting a Document
 
-**Request:** Client asks for document `doc_abc`
+__Request:__ Client asks for document `doc_abc`
 
 ```http
 GET /documents/doc_abc HTTP/1.1
@@ -139,7 +142,6 @@ CRUD (Create, Read, Update, Delete) operations.
   </tbody>
 </table>
 
-
 ---
 
 ## Introducing: DocServer
@@ -149,10 +151,11 @@ A simple REST API demonstrating core concepts.
 **Purpose:** Store, retrieve, and share simple JSON documents.
 
 **Key Features:**
-*   User Authentication (Signup, Login) using JWT.
-*   Document Management (Create, Read, Update, Delete).
-*   Document Sharing between users.
-*   Basic Content Querying within JSON documents.
+
+* User Authentication (Signup, Login) using JWT.
+* Document Management (Create, Read, Update, Delete).
+* Document Sharing between users.
+* Basic Content Querying within JSON documents.
 
 ---
 
@@ -162,13 +165,14 @@ A simple REST API demonstrating core concepts.
 
 **Solution:** JSON Web Tokens (JWT)
 
-1.  Client logs in with email/password.
-2.  Server verifies credentials.
-3.  Server generates a signed JWT (a string containing user info) and sends it back.
-4.  Client stores the JWT and includes it in the `Authorization: Bearer <token>` header for future requests.
-5.  Server verifies the JWT signature on each request to authenticate the user.
+1. Client logs in with email/password.
+2. Server verifies credentials.
+3. Server generates a signed JWT (a string containing user info) and sends it back.
+4. Client stores the JWT and includes it in the `Authorization: Bearer <token>` header for future requests.
+5. Server verifies the JWT signature on each request to authenticate the user.
 
---- 
+---
+
 <div style="display: flex; justify-content: center; align-items: center;">
   <pre class="mermaid" style="scale:2;background:#383838;">
     sequenceDiagram
@@ -188,8 +192,6 @@ A simple REST API demonstrating core concepts.
         Server-->>Client: 200 OK (Document List)
   </pre>
 </div>
-
-
 
 ---
 
@@ -212,6 +214,7 @@ Content-Type: application/json
 ---
 
 **Response (Success):** `201 Created`
+
 ```json
 {
   "id": "user_abc",
@@ -238,14 +241,17 @@ Content-Type: application/json
   "password": "password123"
 }
 ```
+
 ---
 
 **Response (Success):** `200 OK`
+
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
 ```
+
 *(Client now uses this token for authenticated requests)*
 
 ---
@@ -271,6 +277,7 @@ Content-Type: application/json
 ---
 
 **Response (Success):** `201 Created`
+
 ```json
 {
   "id": "doc_xyz",
@@ -291,7 +298,9 @@ Content-Type: application/json
 GET /documents/doc_xyz HTTP/1.1
 Authorization: Bearer <token>
 ```
+
 **Response (Success):** `200 OK`
+
 ```json
 {
   "id": "doc_xyz",
@@ -306,17 +315,18 @@ Authorization: Bearer <token>
 
 ## Docserver Example: Sharing
 
-**Share `doc_xyz` with `user_bob` (Requires Auth Header):**
+__Share `doc_xyz` with `user_bob` (Requires Auth Header):__
 
 ```http
 PUT /documents/doc_xyz/shares/user_bob HTTP/1.1
 Authorization: Bearer <token_from_alice>
 ```
+
 *(No request body needed for adding a single user)*
 
 **Response (Success):** `204 No Content`
 
-*(Now `user_bob` can `GET /documents/doc_xyz` using their own token)*
+_(Now `user_bob` can `GET /documents/doc_xyz` using their own token)_
 
 ---
 
@@ -328,11 +338,13 @@ Authorization: Bearer <token_from_alice>
 GET /documents?scope=owned&content_query=status%20equals%20%22Draft%22 HTTP/1.1
 Authorization: Bearer <token>
 ```
-*(`content_query=status equals "Draft"` - URL encoded)*
+
+_(`content_query=status equals "Draft"` - URL encoded)_
 
 ---
 
 **Response (Success):** `200 OK`
+
 ```json
 {
   "data": [
@@ -355,18 +367,19 @@ Authorization: Bearer <token>
 
 ## Summary
 
-*   **REST APIs** provide a standard, stateless way for web services to communicate using HTTP.
-*   **JWT** offers a common mechanism for handling authentication in stateless APIs.
-*   **Docserver** is a simple example demonstrating these concepts for creating, managing, and sharing JSON documents.
+* **REST APIs** provide a standard, stateless way for web services to communicate using HTTP.
+* **JWT** offers a common mechanism for handling authentication in stateless APIs.
+* **Docserver** is a simple example demonstrating these concepts for creating, managing, and sharing JSON documents.
 
 ---
 
 <!-- _class: lead -->
+
 ## Next Steps
 
-*   Explore the interactive `docs/demo.md` workbook.
-*   Try the API using the Swagger UI (run server and go to `/swagger/index.html`).
-*   Examine the source code (`api/`, `db/`, `models/`).
+* Explore the interactive `docs/demo.md` workbook.
+* Try the API using the Swagger UI (run server and go to `/docs/index.html`).
+* Examine the source code (`api/`, `db/`, `models/`).
 
 **Thank you!**
 
@@ -377,4 +390,3 @@ mermaid.initialize({
 });
 
 window.addEventListener('vscode.markdown.updateContent', function() { mermaid.init() });
-</script>

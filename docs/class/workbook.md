@@ -11,9 +11,9 @@ Welcome to the DocServer Interactive Workbook! Think of this as your hands-on la
 
 Before we dive into the API features, we need the DocServer up and running. The very first code block below takes care of this for you. Here's what it does:
 
-1.  **Downloads:** It fetches the correct DocServer program (binary) for a Linux system.
-2.  **Makes it Executable:** It gives your computer permission to run the downloaded program.
-3.  **Starts the Server:** It launches the DocServer, which will then listen for requests on `http://localhost:8080`.
+1. **Downloads:** It fetches the correct DocServer program (binary) for a Linux system.
+2. **Makes it Executable:** It gives your computer permission to run the downloaded program.
+3. **Starts the Server:** It launches the DocServer, which will then listen for requests on `http://localhost:8080`.
 
 Go ahead and run that first code block!
 
@@ -27,7 +27,7 @@ cd ./demo-sandbox
 
 # Download the binary (use -f to fail silently if it exists, or remove existing first)
 echo "Downloading the binary"
-curl -L -o ./docserver-linux-amd64 https://github.com/HWilliams64/docserver/releases/download/v1.0.3/docserver-linux-amd64
+curl -L -o ./docserver-linux-amd64 https://github.com/HWilliams64/docserver/releases/download/v1.0.5/docserver-linux-amd64
 
 # Ensure the file is executable
 echo "Making the binary executable"
@@ -157,7 +157,7 @@ export ALICE_TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
 echo "Alice's Token (first 10 chars): ${ALICE_TOKEN:0:10}..."
 ```
 
-**Output Explanation:**
+__Output Explanation:__
 The server responds with `200 OK` and a JSON object containing the `token`. The command above uses `jq` to extract the token value and exports it as the environment variable `ALICE_TOKEN`. We'll use this token in the `Authorization` header for Alice's subsequent requests.
 
 <details><summary>🐍 Python</summary><pre><code>import requests
@@ -180,9 +180,6 @@ print(f"Alice's Token (first 10 chars): {ALICE_TOKEN[:10]}...")
 </code></pre></details>
 <details><summary>☕ Java (OkHttp + Gson)</summary><pre><code>import okhttp3.*;&#10;import java.io.IOException;&#10;import com.google.gson.Gson;&#10;import java.util.Map;&#10;import java.util.HashMap;&#10;&#10;// ALICE_EMAIL and ALICE_PASS are already initialized&#10;&#10;OkHttpClient client = new OkHttpClient();&#10;Gson gson = new Gson();&#10;&#10;String url = "http://localhost:8080/auth/login";&#10;Map<String, String> payload = new HashMap<>();&#10;payload.put("email", ALICE_EMAIL);&#10;payload.put("password", ALICE_PASS);&#10;String json = gson.toJson(payload);&#10;&#10;MediaType JSON = MediaType.parse("application/json; charset=utf-8");&#10;RequestBody body = RequestBody.create(json, JSON);&#10;Request request = new Request.Builder()&#10;    .url(url)&#10;    .post(body)&#10;    .build();&#10;&#10;String ALICE_TOKEN = "";&#10;try (Response response = client.newCall(request).execute()) {&#10;  if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);&#10;  &#10;  Map responseMap = gson.fromJson(response.body().charStream(), Map.class);&#10;  ALICE_TOKEN = (String) responseMap.get("token");&#10;  &#10;  // Verify the token was captured (optional)&#10;  System.out.println("Alice's Token (first 10 chars): " + &#10;      ALICE_TOKEN.substring(0, Math.min(ALICE_TOKEN.length(), 10)) + "...");&#10;} catch (IOException e) {&#10;  e.printStackTrace();&#10;}</code></pre></details>
 <details><summary>📱 Kotlin (OkHttp + Gson)</summary><pre><code>import okhttp3.*&#10;import okhttp3.MediaType.Companion.toMediaType&#10;import okhttp3.RequestBody.Companion.toRequestBody&#10;import java.io.IOException;&#10;import com.google.gson.Gson;&#10;import kotlin.math.min&#10;&#10;// ALICE_EMAIL and ALICE_PASS are already initialized&#10;&#10;val client = OkHttpClient()&#10;val gson = Gson()&#10;&#10;val url = "http://localhost:8080/auth/login"&#10;val payload = mapOf(&#10;    "email" to ALICE_EMAIL,&#10;    "password" to ALICE_PASS&#10;)&#10;val json = gson.toJson(payload)&#10;&#10;val mediaType = "application/json; charset=utf-8".toMediaType()&#10;val body = json.toRequestBody(mediaType)&#10;&#10;val request = Request.Builder()&#10;    .url(url)&#10;    .post(body)&#10;    .build()&#10;&#10;var ALICE_TOKEN = ""&#10;try {&#10;    client.newCall(request).execute().use { response ->&#10;        if (!response.isSuccessful) throw IOException("Unexpected code $response")&#10;        &#10;        val responseMap = gson.fromJson(response.body!!.charStream(), Map::class.java)&#10;        ALICE_TOKEN = responseMap["token"] as String&#10;        &#10;        // Verify the token was captured (optional)&#10;        println("Alice's Token (first 10 chars): ${ALICE_TOKEN.substring(0, min(ALICE_TOKEN.length, 10))}...")&#10;    }&#10;} catch (e: IOException) {&#10;    e.printStackTrace()&#10;}</code></pre></details>&#10;
-
-
-
 
 ### Step 4: Alice Creates a Document
 

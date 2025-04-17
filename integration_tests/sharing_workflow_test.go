@@ -77,7 +77,7 @@ func TestMain(m *testing.M) {
 
 	// --- 4. Wait for the server to be ready ---
 	log.Printf("INFO: Waiting for server to become ready at %s...", serverBaseURL)
-	ready := waitForServerReady(serverBaseURL+"/swagger/index.html", readinessTimeout) // Use Swagger UI path as health check
+	ready := waitForServerReady(serverBaseURL+"/docs/index.html", readinessTimeout) // Use Swagger UI path as health check
 	if !ready {
 		// Attempt to kill the process if it didn't become ready
 		_ = serverCmd.Process.Signal(syscall.SIGTERM)

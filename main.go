@@ -6,7 +6,9 @@ import (
 	"docserver/db"
 	_ "docserver/docs" // Import for side effect: registers swagger spec via init()
 	"docserver/utils" // For AuthMiddleware
+	"embed"           // Added for embedding files
 	"fmt"
+	"io/fs" // Added for filesystem interface
 	"log"
 	"math/rand"
 	"net/http"
@@ -18,7 +20,7 @@ import (
 )
 
 // @title           DocServer API
-
+//
 // @description     ## DocServer API
 // @description
 // @description     **Purpose:** This is a simple API server designed for **educational purposes only**. It demonstrates basic concepts of user authentication, document storage (as JSON), document sharing, and content-based querying. **It is NOT intended for production use.**
@@ -94,17 +96,23 @@ import (
 // @description
 // @description     8.  **Nested Field with `AND`:** Find documents where `assignee.name` is `Alice` **AND** `metadata.reviewed` is `true`.
 // @description         `?content_query=assignee.name equals \"Alice\"&content_query=and&content_query=metadata.reviewed equals true`
-
+// @description Type "Bearer" followed by a space and JWT token.
+//
 // @license.name  MIT
 // @license.url   https://github.com/HWilliams64/docserver/blob/main/License.md
-
+//
 // @host      localhost:8080
 // @BasePath  /
-
+//
 // @securityDefinitions.jwt BearerAuth
 // @in header
 // @name Authorization
-// @description Type "Bearer" followed by a space and JWT token.
+
+
+// Embed the docs directory and all its contents
+//go:embed all:docs
+var embeddedDocsFS embed.FS
+
 func main() {
 	// Seed random number generator (for OTPs)
 	rand.Seed(time.Now().UnixNano())
@@ -234,12 +242,17 @@ func main() {
 	})
 
 	// --- Swagger Route ---
-	// Serve static files (CSS, JS, swagger.json) from the docs directory
-	router.StaticFS("/docs", http.Dir("docs"))
+	// Create a sub-filesystem rooted at the 'docs' directory within the embedded FS
+	docsFS, err := fs.Sub(embeddedDocsFS, "docs")
+	if err != nil {
+		log.Fatalf("CRITICAL: Failed to create sub FS for embedded docs: %v", err)
+	}
+	// Serve static files from the embedded filesystem under the /docs URL path
+	router.StaticFS("/static", http.FS(docsFS))
+
 	// Use ginSwagger to handle the UI rendering, pointing it to the served swagger.json
-	// Note: The path for WrapHandler needs to be different from StaticFS to avoid conflict.
-	// Let's use /swagger/ for the UI itself.
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.URL("/docs/swagger.json")))
+	// The URL path remains the same as it's served via StaticFS above.
+	router.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.URL("/static/swagger.json")))
 
 
 	// --- Start Server ---

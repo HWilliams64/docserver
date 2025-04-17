@@ -190,7 +190,83 @@ definitions:
 host: localhost:8080
 info:
   contact: {}
-  description: Type "Bearer" followed by a space and JWT token.
+  description: |-
+    ## DocServer API
+
+    **Purpose:** This is a simple API server designed for **educational purposes only**. It demonstrates basic concepts of user authentication, document storage (as JSON), document sharing, and content-based querying. **It is NOT intended for production use.**
+
+    **High-Level Overview:**
+    DocServer allows users to:
+    *   Register and log in to manage their accounts.
+    *   Create, retrieve, update, and delete documents. Document content can be any valid JSON structure.
+    *   Share their documents with other registered users.
+    *   Search for documents they have access to, including powerful filtering based on the document's JSON content.
+
+    **Content Querying (`content_query` parameter):**
+    The `GET /documents` endpoint supports filtering documents based on their content using the `content_query` parameter. This allows you to search for documents where specific fields within the JSON content match certain criteria.
+
+    **Query Syntax:**
+    Each `content_query` parameter string follows the format: `path operator value`
+
+    *   **`path`**: A dot-separated path to navigate the JSON structure (e.g., `user.name`, `details.metadata.version`). Use numeric indices for arrays (e.g., `items.0.id`, `tags.1`).
+    *   **`operator`**: The comparison operator. Supported operators include:
+    *   `equals`: Equal to (strings, numbers, booleans, null)
+    *   `notequals`: Not equal to
+    *   `greaterthan`: Greater than (numbers)
+    *   `greaterthanorequals`: Greater than or equal to (numbers)
+    *   `lessthan`: Less than (numbers)
+    *   `lessthanorequals`: Less than or equal to (numbers)
+    *   `contains`: String contains substring, or array contains element (case-sensitive by default).
+    *   `startswith`: String starts with prefix (case-sensitive by default).
+    *   `endswith`: String ends with suffix (case-sensitive by default).
+    *   **`value`**: The value to compare against.
+    *   Strings MUST be enclosed in double quotes (e.g., `\"John Doe\"`). Remember to URL-encode the query parameter string. Add `-insensitive` suffix to string operators (e.g., `equals-insensitive`, `contains-insensitive`) for case-insensitive matching.
+    *   Numbers (e.g., `123`, `45.6`), booleans (`true`/`false`), and `null` should be used directly.
+
+    **Logical Operators (Combining Queries):**
+    You combine multiple conditions by providing `content_query` parameters for conditions interleaved with explicit logical operators (`and` or `or`).
+    *   **`and` (Explicit):** To link two conditions with AND, place `content_query=and` between them. The document must match *both* conditions.
+    *   **`or` (Explicit):** To link two conditions with OR, place `content_query=or` between them. The document must match *either* condition.
+
+    **Examples:**
+
+    *Assume document content like:*
+    ```json
+    {
+    "project": "Alpha",
+    "status": "active",
+    "priority": 5,
+    "assignee": { "name": "Alice", "email": "alice@example.com" },
+    "tags": ["urgent", "backend"],
+    "metadata": { "version": 1.2, "reviewed": true }
+    }
+    ```
+
+    1.  **Simple Equality:** Find documents where `status` is `active`.
+    `?content_query=status equals \"active\"`
+
+    2.  **Numeric Comparison:** Find documents where `priority` is greater than or equal to `5`.
+    `?content_query=priority greaterthanorequals 5`
+
+    3.  **Nested Field:** Find documents assigned to `Alice`.
+    `?content_query=assignee.name equals \"Alice\"`
+
+    4.  **Array Element:** Find documents where the first tag is `urgent`.
+    `?content_query=tags.0 equals \"urgent\"`
+
+    5.  **Explicit `AND`:** Find documents for project `Alpha` **AND** status `active`.
+    `?content_query=project equals \"Alpha\"&content_query=and&content_query=status equals \"active\"`
+
+    6.  **Explicit `OR`:** Find documents where status is `active` **OR** priority is less than `3`.
+    `?content_query=status equals \"active\"&content_query=or&content_query=priority lessthan 3`
+
+    7.  **Combined `AND` and `OR`:** Find documents where (project is `Alpha` **AND** status is `active`) **OR** (priority is `10`). Evaluation is strictly left-to-right.
+    `?content_query=project equals \"Alpha\"&content_query=and&content_query=status equals \"active\"&content_query=or&content_query=priority equals 10`
+    *(Explanation: `project equals "Alpha"` AND `status equals "active"` is evaluated first, then the result is OR'd with `priority equals 10`.)*
+
+    8.  **Nested Field with `AND`:** Find documents where `assignee.name` is `Alice` **AND** `metadata.reviewed` is `true`.
+    `?content_query=assignee.name equals \"Alice\"&content_query=and&content_query=metadata.reviewed equals true`
+    Type "Bearer" followed by a space and JWT token.
   license:
     name: MIT
     url: https://github.com/HWilliams64/docserver/blob/main/License.md
