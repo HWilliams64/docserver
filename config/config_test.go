@@ -41,8 +41,11 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	os.Unsetenv("DOCSERVER_ENABLE_BACKUP")
 	os.Unsetenv("DOCSERVER_JWT_SECRET_FILE")
 	os.Unsetenv("DOCSERVER_JWT_SECRET")
-	// Clean up potential generated key file from previous runs
-	os.Remove(defaultJwtKeyFile)
+	// Clean up potential generated key file before the test
+	_ = os.Remove(defaultJwtKeyFile) // Ignore error if not found
+	t.Cleanup(func() {
+		_ = os.Remove(defaultJwtKeyFile) // Clean up after the test
+	})
 
 	// Provide a dummy JWT secret via env var for this test
 	t.Setenv("DOCSERVER_JWT_SECRET", "test-default-secret")
@@ -121,9 +124,13 @@ func TestLoadConfig_Flags(t *testing.T) {
 	os.Unsetenv("DOCSERVER_ENABLE_BACKUP")
 	os.Unsetenv("DOCSERVER_JWT_SECRET_FILE")
 	os.Unsetenv("DOCSERVER_JWT_SECRET")
-	// Provide a dummy JWT secret via env var because the file flag points to a non-existent file
-	// and generation is no longer a fallback.
+	// Provide a dummy JWT secret via env var. Even though generation is now possible,
+	// this test specifically checks flag precedence where the flag file doesn't exist,
+	// so we want it to fall back to the env var, not generation.
 	t.Setenv("DOCSERVER_JWT_SECRET", "test-flag-secret-fallback")
+	// Clean up potential generated key file before/after test
+	_ = os.Remove(defaultJwtKeyFile)
+	t.Cleanup(func() { _ = os.Remove(defaultJwtKeyFile) })
 
 
 	cfg, err := LoadConfig()
@@ -156,8 +163,11 @@ func TestLoadConfig_Precedence(t *testing.T) {
 
 	cleanup := resetFlagsAndArgs("--port", expectedPort) // Set flag
 	defer cleanup()
-	// Provide a dummy JWT secret
+	// Provide a dummy JWT secret to avoid generation path
 	t.Setenv("DOCSERVER_JWT_SECRET", "test-precedence-secret")
+	// Clean up potential generated key file before/after test
+	_ = os.Remove(defaultJwtKeyFile)
+	t.Cleanup(func() { _ = os.Remove(defaultJwtKeyFile) })
 
 	cfg, err := LoadConfig()
 	require.NoError(t, err)
@@ -168,7 +178,10 @@ func TestLoadConfig_Precedence(t *testing.T) {
 
 func TestLoadConfig_SaveIntervalParsing(t *testing.T) {
 	// Provide a dummy JWT secret for all sub-tests
-	t.Setenv("DOCSERVER_JWT_SECRET", "test-interval-secret")
+	t.Setenv("DOCSERVER_JWT_SECRET", "test-interval-secret") // Avoid generation path
+	// Clean up potential generated key file before/after test
+	_ = os.Remove(defaultJwtKeyFile)
+	t.Cleanup(func() { _ = os.Remove(defaultJwtKeyFile) })
 	t.Run("Valid Duration Flag", func(t *testing.T) {
 		cleanup := resetFlagsAndArgs("--save-interval", "5m30s")
 		defer cleanup()
@@ -203,7 +216,10 @@ func TestLoadConfig_SaveIntervalParsing(t *testing.T) {
 
 func TestLoadConfig_EnableBackupParsing(t *testing.T) {
 	// Provide a dummy JWT secret for all sub-tests
-	t.Setenv("DOCSERVER_JWT_SECRET", "test-backup-secret")
+	t.Setenv("DOCSERVER_JWT_SECRET", "test-backup-secret") // Avoid generation path
+	// Clean up potential generated key file before/after test
+	_ = os.Remove(defaultJwtKeyFile)
+	t.Cleanup(func() { _ = os.Remove(defaultJwtKeyFile) })
 	testCases := []struct {
 		name          string
 		envValue      *string // Pointer to distinguish between unset and empty string
@@ -275,6 +291,10 @@ func createTempFile(t *testing.T, content string) string {
 }
 
 func TestLoadConfig_JWTSecretHandling(t *testing.T) {
+	// General cleanup for the default key file for all sub-tests
+	t.Cleanup(func() {
+		_ = os.Remove(defaultJwtKeyFile)
+	})
 
 	// --- Test Case 1: Secret from File (via Flag) ---
 	t.Run("SecretFromFileFlag", func(t *testing.T) {
@@ -286,6 +306,7 @@ func TestLoadConfig_JWTSecretHandling(t *testing.T) {
 		defer cleanup()
 		os.Unsetenv("DOCSERVER_JWT_SECRET_FILE") // Ensure flag takes precedence over potential env var for file path
 		os.Unsetenv("DOCSERVER_JWT_SECRET")      // Ensure env secret is not used
+		_ = os.Remove(defaultJwtKeyFile)         // Ensure default key file doesn't interfere
 
 		cfg, err := LoadConfig()
 		require.NoError(t, err)
@@ -303,6 +324,7 @@ func TestLoadConfig_JWTSecretHandling(t *testing.T) {
 		defer cleanup()
 		t.Setenv("DOCSERVER_JWT_SECRET_FILE", tempFile) // Set file path via env
 		os.Unsetenv("DOCSERVER_JWT_SECRET")             // Ensure env secret is not used
+		_ = os.Remove(defaultJwtKeyFile)                // Ensure default key file doesn't interfere
 
 		cfg, err := LoadConfig()
 		require.NoError(t, err)
@@ -317,6 +339,7 @@ func TestLoadConfig_JWTSecretHandling(t *testing.T) {
 		defer cleanup()
 		os.Unsetenv("DOCSERVER_JWT_SECRET_FILE")        // Ensure no file path is set
 		t.Setenv("DOCSERVER_JWT_SECRET", envSecret)     // Set secret via env var
+		_ = os.Remove(defaultJwtKeyFile)                // Ensure default key file doesn't interfere
 
 		cfg, err := LoadConfig()
 		require.NoError(t, err)
@@ -333,6 +356,7 @@ func TestLoadConfig_JWTSecretHandling(t *testing.T) {
 		defer cleanup()
 		os.Unsetenv("DOCSERVER_JWT_SECRET_FILE")    // Unset env var for file path
 		t.Setenv("DOCSERVER_JWT_SECRET", envSecret) // Set env secret as fallback
+		_ = os.Remove(defaultJwtKeyFile)            // Ensure default key file doesn't interfere
 
 		cfg, err := LoadConfig()
 		require.NoError(t, err)
@@ -340,35 +364,65 @@ func TestLoadConfig_JWTSecretHandling(t *testing.T) {
 		assert.Equal(t, nonExistentFile, cfg.JwtSecretFile, "JwtSecretFile path should still be set from flag")
 	})
 
-	// --- Test Case 5: Generated Secret (No File, No Env Var) ---
+	// --- Test Case 5: Secret from Default Key File ---
+	t.Run("SecretFromDefaultKeyFile", func(t *testing.T) {
+		defaultKeyContent := "secret_from_default_dot_key_file"
+		err := os.WriteFile(defaultJwtKeyFile, []byte(defaultKeyContent), 0600)
+		require.NoError(t, err, "Failed to create default key file")
+		// Cleanup handled by top-level t.Cleanup
+
+		cleanup := resetFlagsAndArgs() // No flag
+		defer cleanup()
+		os.Unsetenv("DOCSERVER_JWT_SECRET_FILE") // Ensure no specific file path
+		os.Unsetenv("DOCSERVER_JWT_SECRET")      // Ensure no env secret
+
+		cfg, err := LoadConfig()
+		require.NoError(t, err)
+		assert.Equal(t, defaultKeyContent, cfg.JwtSecret, "JWT Secret should match default key file content")
+		assert.Empty(t, cfg.JwtSecretFile, "JwtSecretFile path should be empty when using default")
+	})
+
+	// --- Test Case 6: Generated Secret (No File, No Env Var, No Default Key File) ---
 	t.Run("GeneratedSecret", func(t *testing.T) {
 		cleanup := resetFlagsAndArgs() // No flag
 		defer cleanup()
 		os.Unsetenv("DOCSERVER_JWT_SECRET_FILE") // Ensure no file path
 		os.Unsetenv("DOCSERVER_JWT_SECRET")      // Ensure no env secret
-		// Clean up potential generated key file from previous runs/other tests
-		os.Remove(defaultJwtKeyFile)
+		_ = os.Remove(defaultJwtKeyFile)         // Ensure default key file does not exist
 
-		// Since generation is removed, this should now return an error
-		_, err := LoadConfig()
-		require.Error(t, err, "LoadConfig should return an error when no secret is provided")
-		assert.Contains(t, err.Error(), "JWT secret not provided", "Error message should indicate missing JWT secret")
+		cfg, err := LoadConfig()
+		require.NoError(t, err, "LoadConfig should succeed by generating a secret")
+		assert.NotEmpty(t, cfg.JwtSecret, "Generated JWT Secret should not be empty")
+		assert.Len(t, cfg.JwtSecret, 64, "Generated JWT Secret should be 64 hex characters (32 bytes)") // Default generation length
+		assert.Empty(t, cfg.JwtSecretFile, "JwtSecretFile path should be empty when generating")
+
+		// Verify the key was saved to the default file
+		savedBytes, err := os.ReadFile(defaultJwtKeyFile)
+		require.NoError(t, err, "Failed to read generated default key file")
+		assert.Equal(t, cfg.JwtSecret, string(savedBytes), "Saved key file content should match generated secret")
 	})
 
-	// --- Test Case 6: Generated Secret (File Specified but Not Found, No Env Var) ---
-	t.Run("GeneratedSecretFallback", func(t *testing.T) {
+	// --- Test Case 7: Generated Secret (Specified File Not Found, No Env Var, No Default Key File) ---
+	// Even if a specific file is requested but fails, generation should still occur if no other source exists.
+	t.Run("GeneratedSecretWithFailedFile", func(t *testing.T) {
 		nonExistentFile := filepath.Join(t.TempDir(), "non_existent_gen.key")
 
 		cleanup := resetFlagsAndArgs("--jwt-secret-file", nonExistentFile) // Flag points to non-existent file
 		defer cleanup()
 		os.Unsetenv("DOCSERVER_JWT_SECRET_FILE") // Unset env var for file path
 		os.Unsetenv("DOCSERVER_JWT_SECRET")      // Unset env secret
-		os.Remove(defaultJwtKeyFile)   // Clean up potential generated key file
+		_ = os.Remove(defaultJwtKeyFile)         // Ensure default key file does not exist
 
-		// Since generation is removed, this should now return an error
-		_, err := LoadConfig()
-		require.Error(t, err, "LoadConfig should return an error when secret file is not found and no env var fallback")
-		assert.Contains(t, err.Error(), "JWT secret not provided", "Error message should indicate missing JWT secret")
+		cfg, err := LoadConfig()
+		require.NoError(t, err, "LoadConfig should succeed by generating a secret even if specified file failed")
+		assert.NotEmpty(t, cfg.JwtSecret, "Generated JWT Secret should not be empty")
+		assert.Len(t, cfg.JwtSecret, 64, "Generated JWT Secret should be 64 hex characters")
+		assert.Equal(t, nonExistentFile, cfg.JwtSecretFile, "JwtSecretFile path should still reflect the requested (but failed) file")
+
+		// Verify the key was saved to the default file
+		savedBytes, err := os.ReadFile(defaultJwtKeyFile)
+		require.NoError(t, err, "Failed to read generated default key file")
+		assert.Equal(t, cfg.JwtSecret, string(savedBytes), "Saved key file content should match generated secret")
 	})
 }
 
@@ -377,7 +431,10 @@ func TestLoadConfig_JWTSecretHandling(t *testing.T) {
 
 func TestLoadConfig_DbFilePathAbsolute(t *testing.T) {
 	// Provide a dummy JWT secret for all sub-tests
-	t.Setenv("DOCSERVER_JWT_SECRET", "test-dbpath-secret")
+	t.Setenv("DOCSERVER_JWT_SECRET", "test-dbpath-secret") // Avoid generation path
+	// Clean up potential generated key file before/after test
+	_ = os.Remove(defaultJwtKeyFile)
+	t.Cleanup(func() { _ = os.Remove(defaultJwtKeyFile) })
 	originalWd, err := os.Getwd()
 	require.NoError(t, err, "Failed to get current working directory")
 

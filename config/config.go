@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 	"log"
-	// "crypto/rand" // No longer needed after removing JWT generation
-	// "encoding/hex"  // No longer needed after removing JWT generation
+	"crypto/rand" // Needed for JWT generation
+	"encoding/hex"  // Needed for JWT generation
 	"fmt"
 	"strings"
 )
@@ -114,36 +114,77 @@ func LoadConfig() (*Config, error) {
 	}
 
 	// --- JWT Secret Handling ---
-	// Priority: File (CLI/Env) > Env Var > Generate
+	// Priority: File (CLI/Env) > Env Var > Default Key File > Generate
+	var secretSource string // To track where the secret came from for logging
+
+	// 1. Check explicit file path (from flag or DOCSERVER_JWT_SECRET_FILE env)
 	if cfg.JwtSecretFile != "" {
-		// Load from file specified by flag/env
 		secretBytes, err := os.ReadFile(cfg.JwtSecretFile)
-		if err != nil {
-			log.Printf("ERROR: Failed to read JWT secret from file '%s': %v. Attempting fallback/generation.", cfg.JwtSecretFile, err)
-			// Fall through to check ENV or generate
+		if err == nil {
+			cfg.JwtSecret = strings.TrimSpace(string(secretBytes))
+			if cfg.JwtSecret != "" {
+				log.Printf("INFO: Loaded JWT secret from specified file: %s", cfg.JwtSecretFile)
+				secretSource = fmt.Sprintf("File (%s)", cfg.JwtSecretFile)
+			} else {
+				log.Printf("WARN: Specified JWT secret file '%s' is empty or contains only whitespace. Ignoring.", cfg.JwtSecretFile)
+			}
 		} else {
-			cfg.JwtSecret = string(secretBytes)
-			log.Printf("INFO: Loaded JWT secret from file: %s", cfg.JwtSecretFile)
+			log.Printf("WARN: Failed to read specified JWT secret file '%s': %v. Checking other sources.", cfg.JwtSecretFile, err)
 		}
 	}
 
-	// If file wasn't specified or failed to load, check environment variable
+	// 2. Check environment variable (DOCSERVER_JWT_SECRET) if not loaded from file
 	if cfg.JwtSecret == "" {
-		// Use DOCSERVER_ prefix for environment variable
-		cfg.JwtSecret = getEnv("DOCSERVER_JWT_SECRET", defaultJwtSecretEnv)
+		envSecret := getEnv("DOCSERVER_JWT_SECRET", defaultJwtSecretEnv)
+		cfg.JwtSecret = strings.TrimSpace(envSecret)
 		if cfg.JwtSecret != "" {
 			log.Printf("INFO: Loaded JWT secret from DOCSERVER_JWT_SECRET environment variable.")
+			secretSource = "Environment Variable (DOCSERVER_JWT_SECRET)"
 		}
 	}
 
-	// If still no secret after checking file and env var, it's a fatal error.
+	// 3. Check default key file (./docs.key) if still no secret
 	if cfg.JwtSecret == "" {
-		// Removed automatic generation. A secret MUST be provided.
-		return nil, fmt.Errorf("JWT secret not provided via file (DOCSERVER_JWT_SECRET_FILE) or environment variable (DOCSERVER_JWT_SECRET)")
+		secretBytes, err := os.ReadFile(defaultJwtKeyFile)
+		if err == nil {
+			cfg.JwtSecret = strings.TrimSpace(string(secretBytes))
+			if cfg.JwtSecret != "" {
+				log.Printf("INFO: Loaded JWT secret from default key file: %s", defaultJwtKeyFile)
+				secretSource = fmt.Sprintf("Default Key File (%s)", defaultJwtKeyFile)
+			} else {
+				log.Printf("WARN: Default JWT key file '%s' is empty or contains only whitespace. Will attempt generation.", defaultJwtKeyFile)
+			}
+		} else if !os.IsNotExist(err) {
+			// File exists but couldn't be read
+			log.Printf("WARN: Failed to read default JWT key file '%s': %v. Will attempt generation.", defaultJwtKeyFile, err)
+		}
+		// If err is os.IsNotExist, we proceed to generation silently.
 	}
-	// Basic validation: ensure secret is not just whitespace
-	if strings.TrimSpace(cfg.JwtSecret) == "" {
-		return nil, fmt.Errorf("JWT secret cannot be empty or only whitespace")
+
+	// 4. Generate secret if still not found and save to default file
+	if cfg.JwtSecret == "" {
+		log.Printf("INFO: JWT secret not found via file, environment variable, or default key file. Generating a new secret...")
+		newSecret, err := generateRandomKey(32) // Generate a 256-bit key
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate JWT secret: %w", err)
+		}
+		cfg.JwtSecret = newSecret
+
+		// Attempt to save the generated key to the default file
+		err = os.WriteFile(defaultJwtKeyFile, []byte(newSecret), 0600) // Read/write for owner only
+		if err != nil {
+			// Log a warning but continue - the server can still run with the generated key in memory
+			log.Printf("WARN: Failed to save generated JWT secret to '%s': %v. The server will use the generated key for this session only.", defaultJwtKeyFile, err)
+		} else {
+			log.Printf("INFO: Successfully generated and saved new JWT secret to: %s", defaultJwtKeyFile)
+			secretSource = fmt.Sprintf("Generated & Saved (%s)", defaultJwtKeyFile)
+		}
+	}
+
+	// Final validation: ensure secret is not empty after all checks/generation
+	if cfg.JwtSecret == "" {
+		// This should theoretically not happen if generation works, but good to have a safeguard.
+		return nil, fmt.Errorf("failed to obtain a valid JWT secret after checking all sources and attempting generation")
 	}
 
 	// --- Database Path Validation ---
@@ -168,7 +209,7 @@ func LoadConfig() (*Config, error) {
 	// (Moved path resolution and validation earlier, before logging)
 
 
-	logConfiguration(cfg) // Log the final configuration
+	logConfiguration(cfg, secretSource) // Log the final configuration, passing the source hint
 
 	return cfg, nil
 }
@@ -197,37 +238,60 @@ func getEnvBool(key string, fallback bool) bool {
 }
 
 // logConfiguration prints the loaded configuration settings.
-func logConfiguration(cfg *Config) {
+// Takes secretSource hint from LoadConfig.
+func logConfiguration(cfg *Config, secretSource string) {
 	log.Println("--- Configuration ---")
 	log.Printf("Server Address: %s", cfg.ListenAddress)
 	log.Printf("Server Port: %s", cfg.ListenPort)
 	log.Printf("Database File: %s", cfg.DbFilePath)
 	log.Printf("Database Save Interval: %s", cfg.SaveInterval)
 	log.Printf("Database Backup Enabled: %t", cfg.EnableBackup)
-	log.Printf("JWT Secret Source: %s", determineJwtSecretSource(cfg))
+	log.Printf("JWT Secret Source: %s", determineJwtSecretSource(cfg, secretSource)) // Pass hint
 	log.Printf("JWT Token Lifetime: %s", cfg.TokenLifetime)
 	log.Printf("Bcrypt Cost: %d", cfg.BcryptCost)
 	log.Println("---------------------")
 }
 
 // determineJwtSecretSource provides a string indicating how the JWT secret was obtained.
-func determineJwtSecretSource(cfg *Config) string {
+// It relies on the secretSource variable being set correctly during LoadConfig.
+// Note: This function is called *after* LoadConfig successfully completes.
+func determineJwtSecretSource(cfg *Config, sourceHint string) string {
+	// If LoadConfig provided a hint, use it.
+	if sourceHint != "" {
+		return sourceHint
+	}
+
+	// Fallback logic if sourceHint wasn't passed (shouldn't happen ideally)
+	// This logic might be slightly less accurate if errors occurred during loading.
+	log.Println("WARN: determineJwtSecretSource called without source hint, attempting fallback detection.")
 	if cfg.JwtSecretFile != "" {
-		// Check if the secret actually came from this file (it might have failed loading)
 		secretBytes, err := os.ReadFile(cfg.JwtSecretFile)
-		if err == nil && string(secretBytes) == cfg.JwtSecret {
+		if err == nil && strings.TrimSpace(string(secretBytes)) == cfg.JwtSecret {
 			return fmt.Sprintf("File (%s)", cfg.JwtSecretFile)
 		}
 	}
-	// Use DOCSERVER_ prefix
-	if envSecret := getEnv("DOCSERVER_JWT_SECRET", ""); envSecret != "" && envSecret == cfg.JwtSecret {
+	if envSecret := getEnv("DOCSERVER_JWT_SECRET", ""); envSecret != "" && strings.TrimSpace(envSecret) == cfg.JwtSecret {
 		return "Environment Variable (DOCSERVER_JWT_SECRET)"
 	}
-	// Removed check for generated key file as generation is removed
-	// If it wasn't from the specified file or the env var, the source is unclear or potentially problematic
-	// but LoadConfig should have already returned an error if it was empty.
-	// This function might need adjustment if more complex secret sources are added later.
-	return "Provided (File or Environment)"
+	secretBytes, err := os.ReadFile(defaultJwtKeyFile)
+	if err == nil && strings.TrimSpace(string(secretBytes)) == cfg.JwtSecret {
+		// Check if it was potentially generated in this run vs. pre-existing
+		// This distinction is hard without more state, assume pre-existing if found here.
+		return fmt.Sprintf("Default Key File (%s)", defaultJwtKeyFile)
+	}
+
+	// If none of the above match, it was likely generated in memory (maybe save failed)
+	return "Generated (In Memory)"
+}
+
+// generateRandomKey generates a cryptographically secure random key of the specified byte length
+// and returns it as a hex-encoded string.
+func generateRandomKey(length int) (string, error) {
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to read random bytes: %w", err)
+	}
+	return hex.EncodeToString(bytes), nil
 }
 
 // Helper function to handle errors during config loading - could be expanded

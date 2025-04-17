@@ -27,7 +27,7 @@ cd ./demo-sandbox
 
 # Download the binary (use -f to fail silently if it exists, or remove existing first)
 echo "Downloading the binary"
-curl -L -o ./docserver-linux-amd64 https://github.com/HWilliams64/docserver/releases/download/v1.0.5/docserver-linux-amd64
+curl -L -o ./docserver-linux-amd64 https://github.com/HWilliams64/docserver/releases/download/v1.0.6/docserver-linux-amd64
 
 # Ensure the file is executable
 echo "Making the binary executable"

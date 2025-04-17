@@ -107,31 +107,18 @@ func TestMainFailureScenarios(t *testing.T) {
 	binaryPath, cleanup := buildMain(t)
 	defer cleanup()
 
-	// --- Config Load Failure ---
-	// Assuming LoadConfig fails if DOCSERVER_JWT_SECRET is missing (common requirement)
-	// Check config.LoadConfig implementation for actual failure conditions.
-	t.Run("ConfigLoadFailure_MissingJWTSecret", func(t *testing.T) {
-		// Explicitly unset JWT secret (or set others needed, omitting JWT)
-		// We need to ensure *only* the intended variable causes the failure.
-		// Let's assume default DB path is okay, but JWT is mandatory.
-		env := map[string]string{
-			"DOCSERVER_JWT_SECRET": "", // Explicitly empty
-			// Add other potentially required env vars with valid defaults if needed
-			// "DOCSERVER_DB_FILE_PATH": "test_config_fail.json", // Use a temp file
-		}
-		// Clean up any temp file if created
+	// --- Config Load Failure (Removed Missing JWT Secret Test) ---
+	// The test for missing JWT secret causing failure is removed because
+	// the application now generates a secret if none is provided.
+	// We keep other config failure tests (e.g., invalid DB path).
 
-		exitCode, stderr := runMain(t, binaryPath, env)
-
-		assert.NotEqual(t, 0, exitCode, "Expected non-zero exit code for config failure")
-		// Check for the actual critical error from config loading
-		assert.Contains(t, stderr, "CRITICAL: Failed to load configuration", "Stderr should contain config load error message")
-		// Check for the specific reason within the config error
-		assert.Contains(t, stderr, "JWT secret not provided", "Stderr should mention missing JWT secret")
-	})
 
 	// --- Database Init Failure ---
 	t.Run("DBInitFailure_InvalidPath", func(t *testing.T) {
+		// Clean up potential default JWT key file
+		_ = os.Remove("./docs.key")
+		t.Cleanup(func() { _ = os.Remove("./docs.key") })
+
 		// Create a directory where the DB file should be
 		invalidDbPath := t.TempDir() // Use a directory instead of a file path
 
@@ -151,6 +138,10 @@ func TestMainFailureScenarios(t *testing.T) {
 
 	// --- Server Bind Failure ---
 	t.Run("ServerBindFailure_PortInUse", func(t *testing.T) {
+		// Clean up potential default JWT key file
+		_ = os.Remove("./docs.key")
+		t.Cleanup(func() { _ = os.Remove("./docs.key") })
+
 		// Find an available port first, then listen on it
 		listener, err := net.Listen("tcp", ":0") // Listen on random available port
 		require.NoError(t, err, "Failed to listen on a random port")
